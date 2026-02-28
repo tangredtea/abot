@@ -1,0 +1,19 @@
+# ABot minimal configuration example.
+# Copy to config.yaml and fill in your API key to run interactively:
+#   go run ./cmd/abot/ -config config.yaml
+
+app_name: abot
+
+providers:
+  - name: primary
+    api_base: "https://api.openai.com/v1"
+    api_key: "sk-YOUR-KEY-HERE"
+    model: "gpt-4o-mini"
+
+agents:
+  - id: default-bot
+    name: assistant
+    description: "A helpful assistant"
+
+context_window: 128000
+bus_buffer_size: 100

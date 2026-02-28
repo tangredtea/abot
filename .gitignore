@@ -1,0 +1,41 @@
+# Config files with secrets
+config.yaml
+*.env
+.env*
+
+# Logs
+*.log
+logs/
+
+# Data directories with sensitive info
+data/sessions/
+data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+bin/
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test coverage
+coverage.out
+*.cover
+
+# Temporary files
+tmp/
+temp/
+*.tmp
