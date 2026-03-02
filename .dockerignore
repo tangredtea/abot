@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+bin/
+tmp/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+tests/
+testdata/
+
+# Documentation
+docs/
+*.md
+LICENSE
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config files (use environment variables instead)
+config.yaml
+config.*.yaml
+*.env
+.env*
+
+# Data
+data/
+*.db
+*.log
+
+# Dependencies
+vendor/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
