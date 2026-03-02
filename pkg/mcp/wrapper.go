@@ -71,7 +71,8 @@ func wrapTool(client *Client, serverName string, def mcpToolDef) tool.Tool {
 			}
 		}
 
-		result, err := client.CallTool(context.Background(), originalName, argsMap)
+		// Use the context from tool.Context to propagate cancellation/timeout
+		result, err := client.CallTool(ctx, originalName, argsMap)
 		if err != nil {
 			return mcpCallResult{Error: err.Error()}, nil
 		}

@@ -264,7 +264,7 @@ func (c *DiscordChannel) sendMessage(ctx context.Context, channelID, text string
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bot "+c.config.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := channels.DefaultHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("discord: send: %w", err)
 	}
