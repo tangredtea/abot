@@ -1,0 +1,68 @@
+# Minimal config for abot-web (Web Console mode)
+# Copy to config.yaml and fill in your credentials
+
+app_name: abot
+
+# Required: MySQL database
+mysql_dsn: "${MYSQL_DSN}"  # e.g., "user:pass@tcp(localhost:3306)/abot"
+
+# Required: LLM provider
+providers:
+  - name: primary
+    api_base: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"
+    model: "gpt-4o-mini"
+
+# Required: Agent definitions
+agents:
+  - id: default-bot
+    name: assistant
+    description: "A helpful assistant"
+    model: "gpt-4o-mini"
+
+# Required: Web Console configuration
+console:
+  addr: ":3000"
+  jwt_secret: "${JWT_SECRET}"  # Generate with: openssl rand -hex 32
+  static_dir: "web/out"  # Path to Web UI build output
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:3001"  # For development
+
+# Optional: Session storage (defaults to in-memory)
+session:
+  type: memory
+
+# Optional: Channels (for gateway mode)
+# channels:
+#   telegram:
+#     token: "${TELEGRAM_TOKEN}"
+#   discord:
+#     token: "${DISCORD_TOKEN}"
+
+# Optional: MCP servers
+# mcp_servers:
+#   filesystem:
+#     command: "npx"
+#     args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+
+# Optional: Vector database (for memory features)
+# vector_db:
+#   addr: "localhost:6333"
+# embedding:
+#   api_base: "https://api.openai.com/v1"
+#   api_key: "${OPENAI_API_KEY}"
+#   model: "text-embedding-3-small"
+
+# Optional: Scheduler (for cron jobs)
+# scheduler:
+#   heartbeat_interval: "1h"
+#   heartbeat_channel: "telegram"
+#   decision_mode: "passive"
+
+# Optional: Sandbox (for code execution)
+# sandbox:
+#   level: "standard"
+#   restrict_to_workspace: true
+#   exec_memory_mb: 512
+#   exec_cpu_seconds: 30
