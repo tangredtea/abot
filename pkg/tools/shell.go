@@ -66,7 +66,8 @@ func newExec(deps *Deps) tool.Tool {
 		if runtime.GOOS == "windows" {
 			cmd = exec.CommandContext(execCtx, "powershell", "-NoProfile", "-NonInteractive", "-Command", shellCmd)
 		} else {
-			cmd = exec.CommandContext(execCtx, "sh", "-c", shellCmd)
+			bin, cmdArgs, _ := WrapWithSandbox(shellCmd, wsDir, deps.SandboxOpts)
+			cmd = exec.CommandContext(execCtx, bin, cmdArgs...)
 		}
 		cmd.Dir = wsDir
 		cmd.WaitDelay = 3 * time.Second // kill lingering child I/O after timeout
@@ -128,15 +129,15 @@ func Truncate(s string, max int) string {
 		return s
 	}
 	// Find a valid UTF-8 boundary to avoid splitting a multi-byte character.
-	Truncated := s[:max]
-	for i := len(Truncated) - 1; i >= len(Truncated)-4 && i >= 0; i-- {
-		if utf8.RuneStart(Truncated[i]) {
-			r, size := utf8.DecodeRuneInString(Truncated[i:])
-			if r == utf8.RuneError || i+size > len(Truncated) {
-				Truncated = Truncated[:i]
+	truncated := s[:max]
+	for i := len(truncated) - 1; i >= len(truncated)-4 && i >= 0; i-- {
+		if utf8.RuneStart(truncated[i]) {
+			r, size := utf8.DecodeRuneInString(truncated[i:])
+			if r == utf8.RuneError || i+size > len(truncated) {
+				truncated = truncated[:i]
 			}
 			break
 		}
 	}
-	return Truncated + "\n... (Truncated)"
+	return truncated + "\n... (truncated)"
 }

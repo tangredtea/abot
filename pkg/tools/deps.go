@@ -94,6 +94,7 @@ type Deps struct {
 	RestrictToWorkspace bool         // when true, all file ops must stay within WorkspaceDir
 	AllowedPaths        []string     // absolute paths allowed outside workspace (escape hatch)
 	ExecLimits          *ExecLimits  // resource limits for exec commands (nil = no limits)
+	SandboxOpts         *SandboxOpts // Linux Landlock sandbox options (nil = no sandbox)
 	TenantStore         TenantStore  // tenant config store for per-tenant tool permissions (nil = allow all)
 	RateLimiter         *TenantRateLimiter // per-tenant rate limiter (nil = no limit)
 }

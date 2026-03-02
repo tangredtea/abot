@@ -36,9 +36,14 @@ func RegisterBuiltins(ctx context.Context, store types.SkillRegistryStore, built
 			continue
 		}
 
-		parsedName, desc, always := ParseSkillMetadata(string(data))
+		parsedName, desc, always, caps := ParseSkillMetadata(string(data))
 		if parsedName == "" {
 			parsedName = name
+		}
+
+		var meta map[string]any
+		if len(caps) > 0 {
+			meta = map[string]any{"capabilities": caps}
 		}
 
 		rec := &types.SkillRecord{
@@ -48,6 +53,7 @@ func RegisterBuiltins(ctx context.Context, store types.SkillRegistryStore, built
 			Tier:        types.SkillTierBuiltin,
 			AlwaysLoad:  always,
 			Status:      types.StatusPublished,
+			Metadata:    meta,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}

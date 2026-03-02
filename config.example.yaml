@@ -17,3 +17,22 @@ agents:
 
 context_window: 128000
 bus_buffer_size: 100
+
+# Web console mode: go run ./cmd/abot/ console -config config.yaml
+console:
+  addr: ":3000"
+  jwt_secret: "change-me-to-a-random-secret"
+  static_dir: "web/out"
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:3001"
+    # - "*"  # Allow all origins (not recommended for production)
+
+# sandbox:
+#   level: "standard"           # none / standard / strict (Landlock sandbox level, Linux only)
+#   sandbox_binary: ""          # path to abot-sandbox (auto-detected if empty)
+#   restrict_to_workspace: true
+#   exec_memory_mb: 512
+#   exec_cpu_seconds: 30
+#   exec_filesize_mb: 50
+#   exec_nproc: 64

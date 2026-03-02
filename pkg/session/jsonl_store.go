@@ -13,6 +13,7 @@ import (
 	"time"
 
 	adksession "google.golang.org/adk/session"
+	"google.golang.org/genai"
 )
 
 // DefaultCompactThreshold is the file size (bytes) above which compaction is triggered.
@@ -371,6 +372,15 @@ func (s *JSONLService) loadEvents(ctx context.Context, scanner *bufio.Scanner, s
 		}
 		event.TurnComplete = rec.TurnComplete
 		event.Partial = rec.Partial
+
+		// Deserialize Content from JSON (fixes content loss on restart).
+		if len(rec.ContentJSON) > 0 && string(rec.ContentJSON) != "null" {
+			var content genai.Content
+			if err := json.Unmarshal(rec.ContentJSON, &content); err != nil {
+				return fmt.Errorf("parse event content %s: %w", rec.ID, err)
+			}
+			event.Content = &content
+		}
 
 		if err := s.inner.AppendEvent(ctx, sess, event); err != nil {
 			return fmt.Errorf("replay event %s: %w", rec.ID, err)

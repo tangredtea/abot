@@ -18,6 +18,7 @@ type InboundMessage struct {
 	Media      []string
 	Metadata   map[string]string
 	SessionKey string // Optional override; defaults to auto-derived by EffectiveSessionKey.
+	AgentID    string // Optional override; bypasses route resolution when set.
 	Timestamp  time.Time
 }
 

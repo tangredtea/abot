@@ -179,8 +179,35 @@ func ValidateWorkspaceCommand(cmd, workspace string) error {
 	if workspace == "" {
 		return nil
 	}
+
+	// Basic traversal patterns.
 	if strings.Contains(cmd, "../") || strings.Contains(cmd, "..\\") {
 		return fmt.Errorf("path traversal detected in command")
+	}
+
+	absWorkspace, err := filepath.Abs(workspace)
+	if err != nil {
+		return fmt.Errorf("invalid workspace path: %w", err)
+	}
+
+	// Extract path-like tokens from the command and validate each.
+	tokens := strings.FieldsFunc(cmd, func(r rune) bool {
+		return r == ' ' || r == '\t' || r == ';' || r == '|' || r == '&' || r == '>' || r == '<'
+	})
+	for _, tok := range tokens {
+		// Skip flags, empty tokens, and non-path-like strings.
+		if tok == "" || strings.HasPrefix(tok, "-") {
+			continue
+		}
+		// Only check tokens that look like absolute paths.
+		if !filepath.IsAbs(tok) {
+			continue
+		}
+		cleaned := filepath.Clean(tok)
+		inWorkspace := strings.HasPrefix(cleaned, absWorkspace+string(os.PathSeparator)) || cleaned == absWorkspace
+		if !inWorkspace {
+			return fmt.Errorf("absolute path %q in command escapes workspace %q", tok, absWorkspace)
+		}
 	}
 	return nil
 }

@@ -295,7 +295,10 @@ func (al *AgentLoop) runAgentWithRetry(ctx context.Context, r *runner.Runner, ms
 // ProcessDirect processes a message synchronously and returns the response.
 // Unlike processMessage, it skips bus publishing — designed for the agent CLI mode.
 func (al *AgentLoop) ProcessDirect(ctx context.Context, msg types.InboundMessage) (string, error) {
-	agentID := al.registry.ResolveRoute(msg)
+	agentID := msg.AgentID
+	if agentID == "" {
+		agentID = al.registry.ResolveRoute(msg)
+	}
 	if agentID == "" {
 		return "", fmt.Errorf("no agent found for channel=%s chatID=%s", msg.Channel, msg.ChatID)
 	}
@@ -346,4 +349,166 @@ func (al *AgentLoop) maybeCompress(ctx context.Context, sess session.Session) {
 			slog.Error("agent-loop: force compression failed", "err", err)
 		}
 	}
+}
+
+// StreamEvent represents a real-time event during agent processing.
+type StreamEvent struct {
+	Type    string         `json:"type"`            // "text_delta", "tool_call", "tool_result", "done", "error"
+	Content string         `json:"content"`         // text content or tool name
+	Args    map[string]any `json:"args,omitempty"`  // tool call arguments
+	Error   string         `json:"error,omitempty"` // error message (for error type)
+}
+
+// StreamCallback is called for each streaming event during agent processing.
+type StreamCallback func(event StreamEvent)
+
+// ProcessDirectStream processes a message with streaming callbacks.
+// Unlike ProcessDirect, it sends incremental events via the callback.
+func (al *AgentLoop) ProcessDirectStream(ctx context.Context, msg types.InboundMessage, cb StreamCallback) error {
+	agentID := msg.AgentID
+	if agentID == "" {
+		agentID = al.registry.ResolveRoute(msg)
+	}
+	if agentID == "" {
+		cb(StreamEvent{Type: "error", Error: fmt.Sprintf("no agent found for channel=%s chatID=%s", msg.Channel, msg.ChatID)})
+		return fmt.Errorf("no agent found for channel=%s chatID=%s", msg.Channel, msg.ChatID)
+	}
+
+	r, ok := al.registry.GetRunner(agentID)
+	if !ok {
+		cb(StreamEvent{Type: "error", Error: fmt.Sprintf("runner not found for agent %q", agentID)})
+		return fmt.Errorf("runner not found for agent %q", agentID)
+	}
+
+	sessionKey := msg.SessionKey
+	if sessionKey == "" {
+		sessionKey = SessionKey(msg.TenantID, msg.UserID, msg.Channel)
+	}
+
+	if _, err := al.ensureSession(ctx, msg, sessionKey); err != nil {
+		cb(StreamEvent{Type: "error", Error: err.Error()})
+		return err
+	}
+
+	content := &genai.Content{
+		Role:  "user",
+		Parts: []*genai.Part{{Text: msg.Content}},
+	}
+
+	// Run agent with streaming and retry on context overflow.
+	err := al.runAgentStreamWithRetry(ctx, r, msg, sessionKey, content, cb)
+
+	// Post-run compression check.
+	if al.compressor != nil {
+		freshSess, getErr := al.sessionService.Get(ctx, &session.GetRequest{
+			AppName:   al.appName,
+			UserID:    msg.UserID,
+			SessionID: sessionKey,
+		})
+		if getErr == nil {
+			al.maybeCompress(ctx, freshSess.Session)
+		}
+	}
+
+	return err
+}
+
+// runAgentStreamOnce executes a single streaming agent call, sending events via the callback.
+func (al *AgentLoop) runAgentStreamOnce(ctx context.Context, r *runner.Runner, userID, sessionID string, content *genai.Content, cb StreamCallback) error {
+	var finalText strings.Builder
+	var firstErr error
+
+	for ev, err := range r.Run(ctx, userID, sessionID, content, adkagent.RunConfig{}) {
+		if err != nil {
+			firstErr = err
+			break
+		}
+		if ev == nil || ev.Content == nil {
+			continue
+		}
+
+		for _, p := range ev.Content.Parts {
+			if p.Text != "" {
+				if ev.IsFinalResponse() {
+					finalText.WriteString(p.Text)
+				} else {
+					// Partial text delta.
+					cb(StreamEvent{Type: "text_delta", Content: p.Text})
+				}
+			}
+			if p.FunctionCall != nil {
+				args := make(map[string]any)
+				if p.FunctionCall.Args != nil {
+					for k, v := range p.FunctionCall.Args {
+						args[k] = v
+					}
+				}
+				cb(StreamEvent{Type: "tool_call", Content: p.FunctionCall.Name, Args: args})
+			}
+			if p.FunctionResponse != nil {
+				respContent := ""
+				if p.FunctionResponse.Response != nil {
+					if result, ok := p.FunctionResponse.Response["result"]; ok {
+						if s, ok := result.(string); ok {
+							respContent = s
+						}
+					}
+				}
+				cb(StreamEvent{Type: "tool_result", Content: respContent})
+			}
+		}
+
+		if ev.IsFinalResponse() {
+			text := stripThinking(finalText.String())
+			cb(StreamEvent{Type: "text_delta", Content: text})
+			cb(StreamEvent{Type: "done"})
+		}
+	}
+
+	return firstErr
+}
+
+// runAgentStreamWithRetry runs the streaming agent with automatic compression retry.
+func (al *AgentLoop) runAgentStreamWithRetry(ctx context.Context, r *runner.Runner, msg types.InboundMessage, sessionKey string, content *genai.Content, cb StreamCallback) error {
+	for retry := 0; retry <= maxContextRetries; retry++ {
+		err := al.runAgentStreamOnce(ctx, r, msg.UserID, sessionKey, content, cb)
+		if err == nil {
+			return nil
+		}
+
+		if !IsContextOverflowError(err) {
+			cb(StreamEvent{Type: "error", Error: err.Error()})
+			return err
+		}
+
+		if retry >= maxContextRetries {
+			cb(StreamEvent{Type: "error", Error: "context overflow after retries"})
+			return err
+		}
+
+		slog.Warn("agent-loop: stream context overflow, compressing", "retry", retry+1)
+
+		if al.compressor == nil {
+			cb(StreamEvent{Type: "error", Error: "context overflow, no compressor"})
+			return err
+		}
+
+		freshSess, getErr := al.sessionService.Get(ctx, &session.GetRequest{
+			AppName:   al.appName,
+			UserID:    msg.UserID,
+			SessionID: sessionKey,
+		})
+		if getErr != nil {
+			cb(StreamEvent{Type: "error", Error: "failed to get session for compression"})
+			return getErr
+		}
+
+		if compErr := al.compressor.Compress(ctx, freshSess.Session); compErr != nil {
+			if forceErr := al.compressor.ForceCompress(ctx, freshSess.Session); forceErr != nil {
+				cb(StreamEvent{Type: "error", Error: "compression failed"})
+				return forceErr
+			}
+		}
+	}
+	return nil
 }

@@ -26,10 +26,16 @@ Thumbs.db
 bin/
 dist/
 build/
+/abot
+/abot-agent
+/abot-server
+/abot-web
+/abot-sandbox
 *.exe
 *.dll
 *.so
 *.dylib
+*.patch
 
 # Test coverage
 coverage.out
@@ -39,3 +45,9 @@ coverage.out
 tmp/
 temp/
 *.tmp
+
+# Frontend
+web/node_modules/
+web/.next/
+web/out/
+config.test.yaml

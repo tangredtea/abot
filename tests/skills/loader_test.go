@@ -251,7 +251,7 @@ func TestResolveContent_ThreeLevelCache(t *testing.T) {
 
 func TestParseSkillMetadata_YAML(t *testing.T) {
 	content := "---\nname: memory\ndescription: Persistent memory skill\nalways: true\n---\n# Memory\nBody here"
-	name, desc, always := skills.ParseSkillMetadata(content)
+	name, desc, always, caps := skills.ParseSkillMetadata(content)
 	if name != "memory" {
 		t.Errorf("name: got %q, want %q", name, "memory")
 	}
@@ -261,11 +261,14 @@ func TestParseSkillMetadata_YAML(t *testing.T) {
 	if !always {
 		t.Error("expected always=true")
 	}
+	if len(caps) != 0 {
+		t.Errorf("expected no capabilities, got %v", caps)
+	}
 }
 
 func TestParseSkillMetadata_JSON(t *testing.T) {
 	content := "---\n{\"name\":\"search\",\"description\":\"Web search\",\"always\":false}\n---\n# Search"
-	name, desc, always := skills.ParseSkillMetadata(content)
+	name, desc, always, caps := skills.ParseSkillMetadata(content)
 	if name != "search" {
 		t.Errorf("name: got %q, want %q", name, "search")
 	}
@@ -275,12 +278,15 @@ func TestParseSkillMetadata_JSON(t *testing.T) {
 	if always {
 		t.Error("expected always=false")
 	}
+	if len(caps) != 0 {
+		t.Errorf("expected no capabilities, got %v", caps)
+	}
 }
 
 func TestParseSkillMetadata_NoFrontmatter(t *testing.T) {
-	name, desc, always := skills.ParseSkillMetadata("# Just a heading\nNo frontmatter here")
-	if name != "" || desc != "" || always {
-		t.Errorf("expected empty metadata, got name=%q desc=%q always=%v", name, desc, always)
+	name, desc, always, caps := skills.ParseSkillMetadata("# Just a heading\nNo frontmatter here")
+	if name != "" || desc != "" || always || len(caps) != 0 {
+		t.Errorf("expected empty metadata, got name=%q desc=%q always=%v caps=%v", name, desc, always, caps)
 	}
 }
 
@@ -383,5 +389,146 @@ func TestIsAlwaysLoad_TenantOverride(t *testing.T) {
 	ts2 := &types.TenantSkill{AlwaysLoad: &tr}
 	if !skills.IsAlwaysLoad(rec2, ts2) {
 		t.Error("expected true from tenant override")
+	}
+}
+
+func TestParseSkillMetadata_YAMLWithCapabilities(t *testing.T) {
+	content := "---\nname: code-runner\ndescription: Run user code safely\ncapabilities: [exec, read_file, write_file]\n---\n# Code Runner"
+	name, desc, always, caps := skills.ParseSkillMetadata(content)
+	if name != "code-runner" {
+		t.Errorf("name: got %q, want %q", name, "code-runner")
+	}
+	if desc != "Run user code safely" {
+		t.Errorf("description: got %q", desc)
+	}
+	if always {
+		t.Error("expected always=false")
+	}
+	if len(caps) != 3 {
+		t.Fatalf("expected 3 capabilities, got %d: %v", len(caps), caps)
+	}
+	expected := []string{"exec", "read_file", "write_file"}
+	for i, c := range caps {
+		if c != expected[i] {
+			t.Errorf("capability[%d]: got %q, want %q", i, c, expected[i])
+		}
+	}
+}
+
+func TestParseSkillMetadata_JSONWithCapabilities(t *testing.T) {
+	content := `---
+{"name":"sandbox","description":"Sandboxed executor","capabilities":["exec","web_fetch"]}
+---
+# Sandbox`
+	name, desc, _, caps := skills.ParseSkillMetadata(content)
+	if name != "sandbox" {
+		t.Errorf("name: got %q", name)
+	}
+	if desc != "Sandboxed executor" {
+		t.Errorf("description: got %q", desc)
+	}
+	if len(caps) != 2 || caps[0] != "exec" || caps[1] != "web_fetch" {
+		t.Errorf("unexpected capabilities: %v", caps)
+	}
+}
+
+// --- parseSimpleYAMLList tests (via ParseSkillMetadata) ---
+
+func TestParseSimpleYAMLList_EmptyBrackets(t *testing.T) {
+	content := "---\nname: test\ncapabilities: []\n---\nBody"
+	_, _, _, caps := skills.ParseSkillMetadata(content)
+	if caps != nil {
+		t.Errorf("expected nil capabilities for empty brackets, got %v", caps)
+	}
+}
+
+func TestParseSimpleYAMLList_SingleElement(t *testing.T) {
+	content := "---\nname: test\ncapabilities: [exec]\n---\nBody"
+	_, _, _, caps := skills.ParseSkillMetadata(content)
+	if len(caps) != 1 || caps[0] != "exec" {
+		t.Errorf("expected [exec], got %v", caps)
+	}
+}
+
+func TestParseSimpleYAMLList_QuotedValues(t *testing.T) {
+	content := "---\nname: test\ncapabilities: [\"exec\", \"read_file\"]\n---\nBody"
+	_, _, _, caps := skills.ParseSkillMetadata(content)
+	if len(caps) != 2 || caps[0] != "exec" || caps[1] != "read_file" {
+		t.Errorf("expected [exec, read_file], got %v", caps)
+	}
+}
+
+func TestParseSimpleYAMLList_NoBrackets(t *testing.T) {
+	content := "---\nname: test\ncapabilities: exec, read_file\n---\nBody"
+	_, _, _, caps := skills.ParseSkillMetadata(content)
+	if len(caps) != 2 || caps[0] != "exec" || caps[1] != "read_file" {
+		t.Errorf("expected [exec, read_file], got %v", caps)
+	}
+}
+
+func TestParseSimpleYAMLList_EmptyString(t *testing.T) {
+	// capabilities key with empty value: "capabilities:" followed by nothing
+	content := "---\nname: test\ncapabilities:\n---\nBody"
+	_, _, _, caps := skills.ParseSkillMetadata(content)
+	if caps != nil {
+		t.Errorf("expected nil capabilities for empty string, got %v", caps)
+	}
+}
+
+func TestParseSimpleYAMLList_WhitespaceOnly(t *testing.T) {
+	// capabilities value is just whitespace inside brackets
+	content := "---\nname: test\ncapabilities: [   ]\n---\nBody"
+	_, _, _, caps := skills.ParseSkillMetadata(content)
+	if caps != nil {
+		t.Errorf("expected nil capabilities for whitespace-only brackets, got %v", caps)
+	}
+}
+
+// --- ExtractCapabilities tests (direct calls) ---
+
+func TestExtractCapabilities_NilMeta(t *testing.T) {
+	result := skills.ExtractCapabilities(nil)
+	if result != nil {
+		t.Errorf("expected nil for nil meta, got %v", result)
+	}
+}
+
+func TestExtractCapabilities_StringSlice(t *testing.T) {
+	meta := map[string]any{"capabilities": []string{"exec", "read_file"}}
+	result := skills.ExtractCapabilities(meta)
+	if len(result) != 2 || result[0] != "exec" || result[1] != "read_file" {
+		t.Errorf("expected [exec, read_file], got %v", result)
+	}
+}
+
+func TestExtractCapabilities_AnySlice(t *testing.T) {
+	meta := map[string]any{"capabilities": []any{"exec", "read_file"}}
+	result := skills.ExtractCapabilities(meta)
+	if len(result) != 2 || result[0] != "exec" || result[1] != "read_file" {
+		t.Errorf("expected [exec, read_file], got %v", result)
+	}
+}
+
+func TestExtractCapabilities_EmptySlice(t *testing.T) {
+	meta := map[string]any{"capabilities": []string{}}
+	result := skills.ExtractCapabilities(meta)
+	if result != nil {
+		t.Errorf("expected nil for empty slice, got %v", result)
+	}
+}
+
+func TestExtractCapabilities_NonSliceType(t *testing.T) {
+	meta := map[string]any{"capabilities": true}
+	result := skills.ExtractCapabilities(meta)
+	if result != nil {
+		t.Errorf("expected nil for non-slice type (bool), got %v", result)
+	}
+}
+
+func TestExtractCapabilities_MissingKey(t *testing.T) {
+	meta := map[string]any{"other": "value"}
+	result := skills.ExtractCapabilities(meta)
+	if result != nil {
+		t.Errorf("expected nil for missing capabilities key, got %v", result)
 	}
 }

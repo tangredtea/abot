@@ -70,7 +70,7 @@ func (si *SkillInstaller) InstallFromGitHub(ctx context.Context, repo string) (*
 	}
 
 	// Parse metadata.
-	name, desc, always := ParseSkillMetadata(string(body))
+	name, desc, always, caps := ParseSkillMetadata(string(body))
 	if name == "" {
 		name = skillName
 	}
@@ -83,6 +83,10 @@ func (si *SkillInstaller) InstallFromGitHub(ctx context.Context, repo string) (*
 
 	// Create registry record.
 	now := time.Now()
+	meta := map[string]any{"source": "github", "repository": repo}
+	if len(caps) > 0 {
+		meta["capabilities"] = caps
+	}
 	rec := &types.SkillRecord{
 		Name:        name,
 		Description: desc,
@@ -91,7 +95,7 @@ func (si *SkillInstaller) InstallFromGitHub(ctx context.Context, repo string) (*
 		Tier:        types.SkillTierGlobal,
 		AlwaysLoad:  always,
 		Status:      types.StatusPublished,
-		Metadata:    map[string]any{"source": "github", "repository": repo},
+		Metadata:    meta,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}

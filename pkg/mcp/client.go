@@ -256,49 +256,68 @@ func (c *Client) sendRequest(ctx context.Context, method string, params any) (*J
 	return c.sendStdio(ctx, &req)
 }
 
-func (c *Client) sendStdio(_ context.Context, req *JSONRPCRequest) (*JSONRPCResponse, error) {
+func (c *Client) sendStdio(ctx context.Context, req *JSONRPCRequest) (*JSONRPCResponse, error) {
 	data, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	data = append(data, '\n')
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if _, err := c.stdin.Write(data); err != nil {
-		return nil, fmt.Errorf("write to stdin: %w", err)
+	// Run the blocking stdio I/O in a goroutine so context cancellation is respected.
+	type result struct {
+		resp *JSONRPCResponse
+		err  error
 	}
+	ch := make(chan result, 1)
 
-	// Read lines until we get a response matching our request ID.
-	// MCP servers may send notifications (ID=0) between request and response.
-	for i := 0; i < maxSkipLines; i++ {
-		line, err := c.stdout.ReadBytes('\n')
-		if err != nil {
-			return nil, fmt.Errorf("read from stdout: %w", err)
+	go func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+
+		if _, wErr := c.stdin.Write(data); wErr != nil {
+			ch <- result{err: fmt.Errorf("write to stdin: %w", wErr)}
+			return
 		}
 
-		var resp JSONRPCResponse
-		if err := json.Unmarshal(line, &resp); err != nil {
-			slog.Debug("mcp: skipping unparseable line", "server", c.name)
-			continue
-		}
+		// Read lines until we get a response matching our request ID.
+		// MCP servers may send notifications (ID=0) between request and response.
+		for i := 0; i < maxSkipLines; i++ {
+			line, rErr := c.stdout.ReadBytes('\n')
+			if rErr != nil {
+				ch <- result{err: fmt.Errorf("read from stdout: %w", rErr)}
+				return
+			}
 
-		// ID=0 means notification (our IDs start at 1). Skip it.
-		if resp.ID == 0 {
-			slog.Debug("mcp: skipping notification", "server", c.name)
-			continue
-		}
+			var resp JSONRPCResponse
+			if uErr := json.Unmarshal(line, &resp); uErr != nil {
+				slog.Debug("mcp: skipping unparseable line", "server", c.name)
+				continue
+			}
 
-		if resp.ID != req.ID {
-			slog.Warn("mcp: unexpected response ID",
-				"server", c.name, "want", req.ID, "got", resp.ID)
-			continue
-		}
+			// ID=0 means notification (our IDs start at 1). Skip it.
+			if resp.ID == 0 {
+				slog.Debug("mcp: skipping notification", "server", c.name)
+				continue
+			}
 
-		return &resp, nil
+			if resp.ID != req.ID {
+				slog.Warn("mcp: unexpected response ID",
+					"server", c.name, "want", req.ID, "got", resp.ID)
+				continue
+			}
+
+			ch <- result{resp: &resp}
+			return
+		}
+		ch <- result{err: fmt.Errorf("mcp %q: no matching response after %d lines", c.name, maxSkipLines)}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("mcp %q: %w", c.name, ctx.Err())
+	case r := <-ch:
+		return r.resp, r.err
 	}
-	return nil, fmt.Errorf("mcp %q: no matching response after %d lines", c.name, maxSkipLines)
 }
 
 func (c *Client) sendHTTP(ctx context.Context, req *JSONRPCRequest) (*JSONRPCResponse, error) {

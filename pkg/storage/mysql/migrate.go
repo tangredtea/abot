@@ -132,6 +132,74 @@ type MemoryEventModel struct {
 
 func (MemoryEventModel) TableName() string { return "memory_events" }
 
+// AccountModel maps to the accounts table.
+type AccountModel struct {
+	ID           string    `gorm:"column:id;type:varchar(128);primaryKey"`
+	Email        string    `gorm:"column:email;type:varchar(255);uniqueIndex"`
+	PasswordHash string    `gorm:"column:password_hash;type:varchar(255)"`
+	DisplayName  string    `gorm:"column:display_name;type:varchar(255)"`
+	Status       string    `gorm:"column:status;type:varchar(32);default:active"`
+	Role         string    `gorm:"column:role;type:varchar(32);default:user"`
+	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime"`
+}
+
+func (AccountModel) TableName() string { return "accounts" }
+
+// AccountTenantModel maps to the account_tenants table.
+type AccountTenantModel struct {
+	AccountID string    `gorm:"column:account_id;type:varchar(128);primaryKey"`
+	TenantID  string    `gorm:"column:tenant_id;type:varchar(128);primaryKey"`
+	Role      string    `gorm:"column:role;type:varchar(32);default:owner"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
+}
+
+func (AccountTenantModel) TableName() string { return "account_tenants" }
+
+// ChatSessionModel maps to the chat_sessions table.
+type ChatSessionModel struct {
+	ID         string    `gorm:"column:id;type:varchar(128);primaryKey"`
+	TenantID   string    `gorm:"column:tenant_id;type:varchar(128);index:idx_cs_account_tenant"`
+	AccountID  string    `gorm:"column:account_id;type:varchar(128);index:idx_cs_account_tenant"`
+	AgentID    string    `gorm:"column:agent_id;type:varchar(128)"`
+	Title      string    `gorm:"column:title;type:varchar(512)"`
+	SessionKey string    `gorm:"column:session_key;type:varchar(512)"`
+	Pinned     bool      `gorm:"column:pinned;default:false"`
+	Archived   bool      `gorm:"column:archived;default:false"`
+	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt  time.Time `gorm:"column:updated_at;autoUpdateTime"`
+}
+
+func (ChatSessionModel) TableName() string { return "chat_sessions" }
+
+// AgentDefinitionModel maps to the agent_definitions table.
+type AgentDefinitionModel struct {
+	ID          string    `gorm:"column:id;type:varchar(128);primaryKey"`
+	TenantID    string    `gorm:"column:tenant_id;type:varchar(128);index:idx_agent_tenant"`
+	Name        string    `gorm:"column:name;type:varchar(255)"`
+	Description string    `gorm:"column:description;type:text"`
+	Avatar      string    `gorm:"column:avatar;type:varchar(32)"`
+	Model       string    `gorm:"column:model;type:varchar(128)"`
+	Provider    string    `gorm:"column:provider;type:varchar(128)"`
+	Status      string    `gorm:"column:status;type:varchar(32);default:active"`
+	Config      JSON      `gorm:"column:config;type:json"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime"`
+}
+
+func (AgentDefinitionModel) TableName() string { return "agent_definitions" }
+
+// AgentChannelModel maps to the agent_channels table.
+type AgentChannelModel struct {
+	AgentID   string    `gorm:"column:agent_id;type:varchar(128);primaryKey"`
+	Channel   string    `gorm:"column:channel;type:varchar(64);primaryKey"`
+	Enabled   bool      `gorm:"column:enabled;default:true"`
+	Config    JSON      `gorm:"column:config;type:json"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"`
+}
+
+func (AgentChannelModel) TableName() string { return "agent_channels" }
+
 // --- JSON helper type for GORM ---
 
 // JSON is a json.RawMessage wrapper that implements GORM's Scanner/Valuer.
@@ -170,5 +238,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&CronJobModel{},
 		&AgentRouteModel{},
 		&MemoryEventModel{},
+		&AccountModel{},
+		&AccountTenantModel{},
+		&ChatSessionModel{},
+		&AgentDefinitionModel{},
+		&AgentChannelModel{},
 	)
 }

@@ -74,8 +74,9 @@ func (f *FallbackLLM) generateWithFallback(
 		llmByProvider[e.Provider] = e.LLM
 	}
 
-	var lastResp *model.LLMResponse
 	var lastErr error
+	// yieldStopped tracks whether the consumer asked us to stop yielding.
+	yieldStopped := false
 
 	_, chainErr := f.chain.Execute(ctx, candidates, func(ctx context.Context, provider, modelName string) error {
 		llm := llmByProvider[provider]
@@ -86,11 +87,19 @@ func (f *FallbackLLM) generateWithFallback(
 				lastErr = err
 				return err
 			}
-			lastResp = resp
 			lastErr = nil
+			// Yield each response (including partial streaming deltas) immediately.
+			if !yield(resp, nil) {
+				yieldStopped = true
+				return nil
+			}
 		}
 		return nil
 	})
+
+	if yieldStopped {
+		return
+	}
 
 	if chainErr != nil {
 		// All providers failed — yield the last error.
@@ -99,11 +108,5 @@ func (f *FallbackLLM) generateWithFallback(
 		}
 		slog.Warn("fallback: all providers failed", "err", chainErr)
 		yield(nil, lastErr)
-		return
-	}
-
-	// Success — yield the final response.
-	if lastResp != nil {
-		yield(lastResp, nil)
 	}
 }

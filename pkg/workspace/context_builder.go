@@ -324,9 +324,16 @@ func (cb *ContextBuilder) buildSkillsContext(ctx context.Context, tenantID strin
 					fmt.Sprintf("### Skill: %s\n\n%s", rs.Record.Name, content))
 			}
 		}
-		summaryParts = append(summaryParts,
-			fmt.Sprintf("  <skill><name>%s</name><description>%s</description></skill>",
-				escapeXML(rs.Record.Name), escapeXML(rs.Record.Description)))
+		capsStr := strings.Join(rs.Capabilities, ",")
+		if capsStr != "" {
+			summaryParts = append(summaryParts,
+				fmt.Sprintf("  <skill><name>%s</name><description>%s</description><capabilities>%s</capabilities></skill>",
+					escapeXML(rs.Record.Name), escapeXML(rs.Record.Description), escapeXML(capsStr)))
+		} else {
+			summaryParts = append(summaryParts,
+				fmt.Sprintf("  <skill><name>%s</name><description>%s</description></skill>",
+					escapeXML(rs.Record.Name), escapeXML(rs.Record.Description)))
+		}
 	}
 
 	var sb strings.Builder
@@ -462,3 +469,4 @@ func (cb *ContextBuilder) buildRuntimeContext(ctx agent.ReadonlyContext) string 
 
 	return sb.String()
 }
+

@@ -24,9 +24,10 @@ var namePattern = regexp.MustCompile(`^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$`)
 
 // ResolvedSkill is a skill with its content location resolved.
 type ResolvedSkill struct {
-	Record    *types.SkillRecord
-	LocalPath string // local disk path after lazy pull
-	Priority  int    // source priority (lower = higher priority)
+	Record       *types.SkillRecord
+	LocalPath    string   // local disk path after lazy pull
+	Priority     int      // source priority (lower = higher priority)
+	Capabilities []string // tool capabilities declared in frontmatter (nil = unrestricted)
 }
 
 // SkillsLoader loads skill content from BOS/S3 with local disk caching.
@@ -103,7 +104,7 @@ func (sl *SkillsLoader) LoadForTenant(ctx context.Context, tenantID string) ([]*
 				continue
 			}
 			seen[rec.Name] = true
-			result = append(result, &ResolvedSkill{Record: rec, Priority: 1})
+			result = append(result, &ResolvedSkill{Record: rec, Priority: 1, Capabilities: ExtractCapabilities(rec.Metadata)})
 		}
 	}
 
@@ -121,7 +122,7 @@ func (sl *SkillsLoader) LoadForTenant(ctx context.Context, tenantID string) ([]*
 				continue
 			}
 			seen[rec.Name] = true
-			result = append(result, &ResolvedSkill{Record: rec, Priority: 2})
+			result = append(result, &ResolvedSkill{Record: rec, Priority: 2, Capabilities: ExtractCapabilities(rec.Metadata)})
 		}
 	}
 
@@ -131,7 +132,7 @@ func (sl *SkillsLoader) LoadForTenant(ctx context.Context, tenantID string) ([]*
 			continue
 		}
 		seen[rec.Name] = true
-		result = append(result, &ResolvedSkill{Record: rec, Priority: 3})
+		result = append(result, &ResolvedSkill{Record: rec, Priority: 3, Capabilities: ExtractCapabilities(rec.Metadata)})
 	}
 
 	// P4: builtin skills
@@ -140,7 +141,7 @@ func (sl *SkillsLoader) LoadForTenant(ctx context.Context, tenantID string) ([]*
 			continue
 		}
 		seen[rec.Name] = true
-		result = append(result, &ResolvedSkill{Record: rec, Priority: 4})
+		result = append(result, &ResolvedSkill{Record: rec, Priority: 4, Capabilities: ExtractCapabilities(rec.Metadata)})
 	}
 
 	return result, nil
@@ -282,27 +283,29 @@ func StripFrontmatter(content string) string {
 	return StripFrontmatterRe.ReplaceAllString(content, "")
 }
 
-// ParseSkillMetadata extracts name, description, always from SKILL.md frontmatter.
-func ParseSkillMetadata(content string) (name, description string, always bool) {
+// ParseSkillMetadata extracts name, description, always, and capabilities from SKILL.md frontmatter.
+func ParseSkillMetadata(content string) (name, description string, always bool, capabilities []string) {
 	fm := extractFrontmatter(content)
 	if fm == "" {
-		return "", "", false
+		return "", "", false, nil
 	}
 
 	// Try JSON first
 	var jm struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Always      bool   `json:"always"`
+		Name         string   `json:"name"`
+		Description  string   `json:"description"`
+		Always       bool     `json:"always"`
+		Capabilities []string `json:"capabilities"`
 	}
 	if json.Unmarshal([]byte(fm), &jm) == nil && jm.Name != "" {
-		return jm.Name, jm.Description, jm.Always
+		return jm.Name, jm.Description, jm.Always, jm.Capabilities
 	}
 
 	// Simple YAML fallback
 	kv := parseSimpleYAML(fm)
 	always = kv["always"] == "true"
-	return kv["name"], kv["description"], always
+	capabilities = parseSimpleYAMLList(kv["capabilities"])
+	return kv["name"], kv["description"], always, capabilities
 }
 
 func parseSimpleYAML(content string) map[string]string {
@@ -323,6 +326,67 @@ func parseSimpleYAML(content string) map[string]string {
 		}
 	}
 	return result
+}
+
+// parseSimpleYAMLList parses a simple YAML inline list value like "[exec, read_file]"
+// or "exec, read_file" into a string slice. Returns nil for empty input.
+func parseSimpleYAMLList(value string) []string {
+	if value == "" {
+		return nil
+	}
+	// Strip surrounding brackets if present.
+	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "[")
+	value = strings.TrimSuffix(value, "]")
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+
+	parts := strings.Split(value, ",")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		p = strings.Trim(p, "\"'")
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// ExtractCapabilities reads the "capabilities" key from skill metadata and
+// returns a []string. Returns nil if not present or not a list.
+func ExtractCapabilities(meta map[string]any) []string {
+	if meta == nil {
+		return nil
+	}
+	v, ok := meta["capabilities"]
+	if !ok {
+		return nil
+	}
+	switch caps := v.(type) {
+	case []string:
+		if len(caps) == 0 {
+			return nil
+		}
+		return caps
+	case []any:
+		out := make([]string, 0, len(caps))
+		for _, c := range caps {
+			if s, ok := c.(string); ok {
+				out = append(out, s)
+			}
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	}
+	return nil
 }
 
 func escapeXML(s string) string {

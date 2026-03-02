@@ -26,14 +26,14 @@ import (
 
 // Config is the top-level application configuration.
 type Config struct {
-	AppName       string              `yaml:"app_name"`
-	MySQLDSN      string              `yaml:"mysql_dsn"`
-	ObjectStore   ObjectStoreConfig   `yaml:"object_store"`
-	VectorDB      VectorDBConfig      `yaml:"vector_db"`
-	Embedding     EmbeddingConfig     `yaml:"embedding"`
-	Cache         CacheConfig         `yaml:"cache"`
-	Providers     []ProviderConfig    `yaml:"providers"`
-	Agents        []AgentDefConfig    `yaml:"agents"`
+	AppName       string                     `yaml:"app_name"`
+	MySQLDSN      string                     `yaml:"mysql_dsn"`
+	ObjectStore   ObjectStoreConfig          `yaml:"object_store"`
+	VectorDB      VectorDBConfig             `yaml:"vector_db"`
+	Embedding     EmbeddingConfig            `yaml:"embedding"`
+	Cache         CacheConfig                `yaml:"cache"`
+	Providers     []ProviderConfig           `yaml:"providers"`
+	Agents        []AgentDefConfig           `yaml:"agents"`
 	Plugins       PluginsConfig              `yaml:"plugins"`
 	Scheduler     SchedulerConfig            `yaml:"scheduler"`
 	MCP           map[string]MCPServerConfig `yaml:"mcp_servers"`
@@ -44,20 +44,21 @@ type Config struct {
 	Session       SessionConfig              `yaml:"session,omitempty"`
 	A2A           A2AConfig                  `yaml:"a2a"`
 	Sandbox       SandboxConfig              `yaml:"sandbox,omitempty"`
-	SkillCacheDir string              `yaml:"skill_cache_dir"`
-	ContextWindow int                 `yaml:"context_window"`
-	BusBufferSize int                 `yaml:"bus_buffer_size"`
-	HealthAddr    string              `yaml:"health_addr,omitempty"` // e.g. ":8081", empty = disabled
+	Console       ConsoleConfig              `yaml:"console,omitempty"`
+	SkillCacheDir string                     `yaml:"skill_cache_dir"`
+	ContextWindow int                        `yaml:"context_window"`
+	BusBufferSize int                        `yaml:"bus_buffer_size"`
+	HealthAddr    string                     `yaml:"health_addr,omitempty"` // e.g. ":8081", empty = disabled
 
 	// Runtime overrides (set via CLI flags, not YAML).
-	CLITenantID  string `yaml:"-"`
-	CLIUserID    string `yaml:"-"`
-	CLINoMarkdown bool  `yaml:"-"`
+	CLITenantID   string `yaml:"-"`
+	CLIUserID     string `yaml:"-"`
+	CLINoMarkdown bool   `yaml:"-"`
 }
 
 // Sub-config types.
 type ObjectStoreConfig struct {
-	Type   string `yaml:"type"`   // "local" or "s3"
+	Type   string `yaml:"type"` // "local" or "s3"
 	Bucket string `yaml:"bucket"`
 	Region string `yaml:"region"`
 	Dir    string `yaml:"dir"` // for local type
@@ -155,17 +156,27 @@ type SessionConfig struct {
 	Dir  string `yaml:"dir"`  // directory for jsonl files
 }
 
+// ConsoleConfig holds web console configuration.
+type ConsoleConfig struct {
+	Addr           string   `yaml:"addr"`            // e.g. ":3000"
+	JWTSecret      string   `yaml:"jwt_secret"`
+	StaticDir      string   `yaml:"static_dir"`      // e.g. "web/out"
+	AllowedOrigins []string `yaml:"allowed_origins"` // CORS allowed origins
+}
+
 // SandboxConfig controls workspace security sandboxing.
 type SandboxConfig struct {
-	RestrictToWorkspace bool     `yaml:"restrict_to_workspace"` // enforce all file ops within workspace
-	AllowedPaths        []string `yaml:"allowed_paths"`         // absolute paths allowed outside workspace
-	ExtraDenyPatterns   []string `yaml:"extra_deny_patterns"`   // additional shell command deny patterns
-	ExecMemoryMB        int      `yaml:"exec_memory_mb"`        // ulimit -v per exec (default 512, 0=no limit)
-	ExecCPUSeconds      int      `yaml:"exec_cpu_seconds"`      // ulimit -t per exec (default 30, 0=no limit)
-	ExecFileSizeMB      int      `yaml:"exec_filesize_mb"`      // ulimit -f per exec (default 50, 0=no limit)
-	ExecNProc           int      `yaml:"exec_nproc"`            // ulimit -u per exec (default 64, 0=no limit)
-	RateLimit           float64  `yaml:"rate_limit"`            // tool calls per second per tenant (0=no limit)
-	RateBurst           int      `yaml:"rate_burst"`            // max burst for rate limiter (default 10)
+	RestrictToWorkspace bool     `yaml:"restrict_to_workspace"`    // enforce all file ops within workspace
+	AllowedPaths        []string `yaml:"allowed_paths"`            // absolute paths allowed outside workspace
+	ExtraDenyPatterns   []string `yaml:"extra_deny_patterns"`      // additional shell command deny patterns
+	ExecMemoryMB        int      `yaml:"exec_memory_mb"`           // ulimit -v per exec (default 512, 0=no limit)
+	ExecCPUSeconds      int      `yaml:"exec_cpu_seconds"`         // ulimit -t per exec (default 30, 0=no limit)
+	ExecFileSizeMB      int      `yaml:"exec_filesize_mb"`         // ulimit -f per exec (default 50, 0=no limit)
+	ExecNProc           int      `yaml:"exec_nproc"`               // ulimit -u per exec (default 64, 0=no limit)
+	RateLimit           float64  `yaml:"rate_limit"`               // tool calls per second per tenant (0=no limit)
+	RateBurst           int      `yaml:"rate_burst"`               // max burst for rate limiter (default 10)
+	Level               string   `yaml:"level,omitempty"`          // "none" / "standard" / "strict" — Landlock sandbox level
+	SandboxBinary       string   `yaml:"sandbox_binary,omitempty"` // path to abot-sandbox (auto-detected if empty)
 }
 
 // PluginsConfig controls which plugins are enabled.
@@ -223,6 +234,12 @@ func (c *Config) Validate() error {
 	if c.Scheduler.DecisionMode == "llm" && len(c.Providers) < 1 {
 		add("scheduler.decision_mode=llm requires at least one provider")
 	}
+	switch c.Sandbox.Level {
+	case "", "none", "standard", "strict":
+		// valid
+	default:
+		add(fmt.Sprintf("sandbox.level %q is invalid; must be one of: none, standard, strict", c.Sandbox.Level))
+	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("config validation failed:\n  - %s", strings.Join(errs, "\n  - "))
@@ -232,6 +249,7 @@ func (c *Config) Validate() error {
 
 // App holds all assembled components and manages their lifecycle.
 type App struct {
+	appName         string
 	agentLoop       *AgentLoop
 	registry        *AgentRegistry
 	channelRegistry *channels.Registry
@@ -247,18 +265,18 @@ type App struct {
 // Bootstrap assembles all components from config and returns a runnable App.
 // Other tasks (storage, providers, tools, etc.) are injected via BootstrapDeps.
 type BootstrapDeps struct {
-	Bus            types.MessageBus
-	SessionService session.Service
-	LLM            model.LLM               // primary LLM for agents
-	SummaryLLM     model.LLM               // cheap LLM for compression
-	Tools          []any                    // []tool.Tool — use any to avoid import cycle
-	Toolsets       []tool.Toolset           // MCP toolsets and others
-	Plugins        []*plugin.Plugin         // ADK-Go plugins (auditlog, tokentracker, etc.)
-	Channels       map[string]types.Channel // named channels to register
-	CronService    *scheduler.CronService
-	HeartbeatSvc   *scheduler.HeartbeatService
-	MCPClients     []io.Closer              // MCP client processes to close on shutdown
-	APIHandler     http.Handler             // optional HTTP API (marketplace, etc.)
+	Bus                 types.MessageBus
+	SessionService      session.Service
+	LLM                 model.LLM                // primary LLM for agents
+	SummaryLLM          model.LLM                // cheap LLM for compression
+	Tools               []any                    // []tool.Tool — use any to avoid import cycle
+	Toolsets            []tool.Toolset           // MCP toolsets and others
+	Plugins             []*plugin.Plugin         // ADK-Go plugins (auditlog, tokentracker, etc.)
+	Channels            map[string]types.Channel // named channels to register
+	CronService         *scheduler.CronService
+	HeartbeatSvc        *scheduler.HeartbeatService
+	MCPClients          []io.Closer  // MCP client processes to close on shutdown
+	APIHandler          http.Handler // optional HTTP API (marketplace, etc.)
 	InstructionProvider func(adkagent.ReadonlyContext) (string, error)
 }
 
@@ -319,6 +337,7 @@ func Bootstrap(ctx context.Context, cfg Config, deps BootstrapDeps) (*App, error
 	}
 
 	return &App{
+		appName:         appName,
 		agentLoop:       loop,
 		registry:        registry,
 		channelRegistry: chanReg,
@@ -397,6 +416,21 @@ func registerAgent(registry *AgentRegistry, agentCfg AgentDefConfig, deps Bootst
 // ProcessDirect delegates to the internal AgentLoop for synchronous processing.
 func (a *App) ProcessDirect(ctx context.Context, msg types.InboundMessage) (string, error) {
 	return a.agentLoop.ProcessDirect(ctx, msg)
+}
+
+// AppName returns the application name.
+func (a *App) AppName() string {
+	return a.appName
+}
+
+// ExportRegistry returns the underlying agent registry for external use (e.g., web console).
+func (a *App) ExportRegistry() *AgentRegistry {
+	return a.registry
+}
+
+// ExportLoop returns the underlying agent loop for external use (e.g., web console streaming).
+func (a *App) ExportLoop() *AgentLoop {
+	return a.agentLoop
 }
 
 // RunServices starts only cron + heartbeat (no channels, no bus event loop).

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"google.golang.org/genai"
 
@@ -56,7 +57,7 @@ func (g *guardedTool) Declaration() *genai.FunctionDeclaration {
 	return g.inner.Declaration()
 }
 
-// Run intercepts tool execution to check tenant permissions and rate limits.
+// Run intercepts tool execution to check tenant permissions, skill capabilities, and rate limits.
 func (g *guardedTool) Run(ctx tool.Context, args any) (map[string]any, error) {
 	tenantID := stateStr(ctx, "tenant_id")
 
@@ -64,6 +65,16 @@ func (g *guardedTool) Run(ctx tool.Context, args any) (map[string]any, error) {
 	if g.tenantStore != nil && tenantID != "" {
 		if err := g.checkPermission(ctx, tenantID); err != nil {
 			return map[string]any{"error": err.Error()}, nil
+		}
+	}
+
+	// Check skill-level capability restrictions.
+	// The "skill_allowed_tools" state key is expected to be set by the skill
+	// execution dispatcher before invoking tools within a skill context.
+	// When not set (nil or empty), all tools are allowed (backward compatible).
+	if allowed := stateStrSlice(ctx, "skill_allowed_tools"); len(allowed) > 0 {
+		if !containsStr(allowed, g.name) {
+			return map[string]any{"error": fmt.Sprintf("tool %q not in skill capabilities", g.name)}, nil
 		}
 	}
 
@@ -79,14 +90,62 @@ func (g *guardedTool) Run(ctx tool.Context, args any) (map[string]any, error) {
 
 func (g *guardedTool) checkPermission(ctx context.Context, tenantID string) error {
 	tenant, err := g.tenantStore.Get(ctx, tenantID)
-	if err != nil || tenant == nil {
-		return nil // unknown tenant = allow (fail open)
+	if err != nil {
+		slog.Warn("guard: tenant store error, denying tool call (fail-closed)", "tenant", tenantID, "err", err)
+		return fmt.Errorf("tool %q: permission check failed for tenant %q: %w", g.name, tenantID, err)
 	}
-	denied, _ := tenant.Config["denied_tools"].([]any)
-	for _, d := range denied {
-		if s, ok := d.(string); ok && s == g.name {
-			return fmt.Errorf("tool %q is not permitted for tenant %q", g.name, tenantID)
+	if tenant == nil {
+		return nil
+	}
+	// denied_tools may be stored as []any (from JSON) or []string.
+	switch denied := tenant.Config["denied_tools"].(type) {
+	case []any:
+		for _, d := range denied {
+			if s, ok := d.(string); ok && s == g.name {
+				return fmt.Errorf("tool %q is not permitted for tenant %q", g.name, tenantID)
+			}
+		}
+	case []string:
+		for _, s := range denied {
+			if s == g.name {
+				return fmt.Errorf("tool %q is not permitted for tenant %q", g.name, tenantID)
+			}
 		}
 	}
 	return nil
+}
+
+// stateStrSlice reads a []string value from session state.
+// Returns nil if the key is missing or not a []any / []string.
+func stateStrSlice(ctx tool.Context, key string) []string {
+	v, err := ctx.State().Get(key)
+	if err != nil || v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case []string:
+		return val
+	case []any:
+		out := make([]string, 0, len(val))
+		for _, item := range val {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	}
+	return nil
+}
+
+// containsStr checks if a string slice contains a given value.
+func containsStr(slice []string, val string) bool {
+	for _, s := range slice {
+		if s == val {
+			return true
+		}
+	}
+	return false
 }
