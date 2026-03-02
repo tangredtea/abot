@@ -1,0 +1,43 @@
+# ABot Server Configuration Example
+# This is the configuration for abot-server (API-only mode, no Web UI)
+# Copy to config.yaml and customize for your deployment
+
+app_name: abot
+
+# MySQL database (required for server mode)
+mysql_dsn: "user:password@tcp(localhost:3306)/abot?charset=utf8mb4&parseTime=True&loc=Local"
+
+# LLM Provider configuration
+providers:
+  - name: primary
+    api_base: "https://api.openai.com/v1"
+    api_key: "sk-YOUR-KEY-HERE"
+    model: "gpt-4o-mini"
+
+# Agent definitions
+agents:
+  - id: default-bot
+    name: assistant
+    description: "A helpful assistant"
+
+context_window: 128000
+bus_buffer_size: 100
+
+# Console API configuration
+console:
+  addr: ":3000"
+  jwt_secret: "change-me-to-a-random-secret-at-least-32-chars"
+  allowed_origins:
+    - "http://localhost:3001"  # Your frontend app
+    - "https://yourdomain.com"
+    # - "*"  # Allow all origins (not recommended for production)
+
+# Optional: Sandbox configuration (Linux only)
+# sandbox:
+#   level: "standard"           # none / standard / strict
+#   sandbox_binary: ""          # path to abot-sandbox (auto-detected if empty)
+#   restrict_to_workspace: true
+#   exec_memory_mb: 512
+#   exec_cpu_seconds: 30
+#   exec_filesize_mb: 50
+#   exec_nproc: 64

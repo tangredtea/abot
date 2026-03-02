@@ -51,8 +51,8 @@ func main() {
 func run() error {
 	// Detect subcommand before flag.Parse().
 	subcmd := ""
-	if len(os.Args) > 1 && os.Args[1] == "agent" {
-		subcmd = "agent"
+	if len(os.Args) > 1 && (os.Args[1] == "agent" || os.Args[1] == "console") {
+		subcmd = os.Args[1]
 		os.Args = append(os.Args[:1], os.Args[2:]...) // strip subcommand for flag parsing
 	}
 
@@ -75,6 +75,9 @@ func run() error {
 
 	if subcmd == "agent" {
 		return runAgent(cfg)
+	}
+	if subcmd == "console" {
+		return runConsole(cfg)
 	}
 
 	return runGateway(cfg)
@@ -118,6 +121,9 @@ type storeBundle struct {
 	scheduler     *mysqlstore.SchedulerStoreMySQL
 	proposal      *mysqlstore.SkillProposalStoreMySQL
 	memoryEvent   *mysqlstore.MemoryEventStoreMySQL
+	account       *mysqlstore.AccountStore
+	accountTenant *mysqlstore.AccountTenantStore
+	chatSession   *mysqlstore.ChatSessionStore
 }
 
 func newDatabase(cfg *agent.Config) (*gorm.DB, error) {
@@ -145,6 +151,9 @@ func newStores(db *gorm.DB) *storeBundle {
 		scheduler:     mysqlstore.NewSchedulerStore(db),
 		proposal:      mysqlstore.NewSkillProposalStore(db),
 		memoryEvent:   mysqlstore.NewMemoryEventStore(db),
+		account:       mysqlstore.NewAccountStore(db),
+		accountTenant: mysqlstore.NewAccountTenantStore(db),
+		chatSession:   mysqlstore.NewChatSessionStore(db),
 	}
 }
 
@@ -322,6 +331,38 @@ func buildDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
 		RestrictToWorkspace: cfg.Sandbox.RestrictToWorkspace,
 		AllowedPaths:        cfg.Sandbox.AllowedPaths,
 	}
+
+	// Wire ExecLimits from sandbox config (fixes bug where these were never applied).
+	if cfg.Sandbox.ExecMemoryMB > 0 || cfg.Sandbox.ExecCPUSeconds > 0 ||
+		cfg.Sandbox.ExecFileSizeMB > 0 || cfg.Sandbox.ExecNProc > 0 {
+		toolsDeps.ExecLimits = &tools.ExecLimits{
+			MemoryMB:   cfg.Sandbox.ExecMemoryMB,
+			CPUSeconds: cfg.Sandbox.ExecCPUSeconds,
+			FileSizeMB: cfg.Sandbox.ExecFileSizeMB,
+			NProc:      cfg.Sandbox.ExecNProc,
+		}
+	}
+
+	// Wire SandboxOpts for Landlock kernel-level filesystem sandbox.
+	if cfg.Sandbox.Level != "" && cfg.Sandbox.Level != "none" {
+		toolsDeps.SandboxOpts = &tools.SandboxOpts{
+			Level:        tools.SandboxLevel(cfg.Sandbox.Level),
+			HelperBinary: cfg.Sandbox.SandboxBinary,
+		}
+	}
+
+	// Wire per-tenant rate limiter.
+	if cfg.Sandbox.RateLimit > 0 {
+		burst := cfg.Sandbox.RateBurst
+		if burst <= 0 {
+			burst = 10
+		}
+		toolsDeps.RateLimiter = tools.NewTenantRateLimiter(cfg.Sandbox.RateLimit, burst)
+	}
+
+	// Wire tenant store for per-tenant tool permission checks.
+	toolsDeps.TenantStore = stores.tenant
+
 	builtTools, err := tools.BuildAllTools(toolsDeps)
 	if err != nil {
 		return nil, fmt.Errorf("build tools: %w", err)
