@@ -15,6 +15,7 @@ import (
 
 	"abot/pkg/channels"
 	"abot/pkg/types"
+	"golang.org/x/sync/semaphore"
 )
 
 const ChannelName = "wecom"
@@ -120,6 +121,7 @@ type WeComChannel struct {
 	userID   string
 	ctx      context.Context
 	cancel   context.CancelFunc
+	sem      *semaphore.Weighted
 }
 
 // NewWeComChannel creates a new WeCom Bot channel.
@@ -133,6 +135,7 @@ func NewWeComChannel(cfg WeComConfig, bus types.MessageBus) (*WeComChannel, erro
 		dedup:       NewDedupCache(dedupTTL),
 		tenantID:    cfg.TenantID,
 		userID:      cfg.UserID,
+		sem:         semaphore.NewWeighted(100), // Limit concurrent message processing
 	}, nil
 }
 
@@ -339,7 +342,14 @@ func (c *WeComChannel) HandleMessageCallback(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	go c.processMessage(c.ctx, msg)
+	go func() {
+		if err := c.sem.Acquire(c.ctx, 1); err != nil {
+			slog.Warn("wecom: failed to acquire semaphore", "err", err)
+			return
+		}
+		defer c.sem.Release(1)
+		c.processMessage(c.ctx, msg)
+	}()
 
 	// Return 200 with empty body; reply asynchronously via webhook URL.
 	w.WriteHeader(http.StatusOK)
@@ -530,7 +540,7 @@ func (c *WeComChannel) sendReply(ctx context.Context, responseURL, content strin
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := channels.DefaultHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("wecom: send reply: %w", err)
 	}

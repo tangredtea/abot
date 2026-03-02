@@ -94,34 +94,10 @@ func (al *AgentLoop) safeProcessMessage(ctx context.Context, msg types.InboundMe
 }
 
 func (al *AgentLoop) processMessage(ctx context.Context, msg types.InboundMessage) error {
-	agentID := al.registry.ResolveRoute(msg)
-	if agentID == "" {
-		return fmt.Errorf("no agent found for channel=%s chatID=%s", msg.Channel, msg.ChatID)
-	}
-
-	r, ok := al.registry.GetRunner(agentID)
-	if !ok {
-		return fmt.Errorf("runner not found for agent %q", agentID)
-	}
-
-	sessionKey := msg.SessionKey
-	if sessionKey == "" {
-		sessionKey = SessionKey(msg.TenantID, msg.UserID, msg.Channel)
-	}
-
-	// Ensure session exists.
-	if _, err := al.ensureSession(ctx, msg, sessionKey); err != nil {
+	response, err := al.prepareAndRun(ctx, msg)
+	if err != nil {
 		return err
 	}
-
-	// Build user content.
-	content := &genai.Content{
-		Role:  "user",
-		Parts: []*genai.Part{{Text: msg.Content}},
-	}
-
-	// Run agent with automatic compression retry on context overflow.
-	response := al.runAgentWithRetry(ctx, r, msg, sessionKey, content)
 
 	// Publish outbound.
 	if response != "" {
@@ -137,6 +113,44 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg types.InboundMessag
 		slog.Warn("agent-loop: empty response from agent", "channel", msg.Channel, "chat_id", msg.ChatID)
 	}
 
+	return nil
+}
+
+// prepareAndRun handles common setup logic: route resolution, session creation,
+// agent execution, and post-run compression. Returns the agent's response text.
+func (al *AgentLoop) prepareAndRun(ctx context.Context, msg types.InboundMessage) (string, error) {
+	agentID := msg.AgentID
+	if agentID == "" {
+		agentID = al.registry.ResolveRoute(msg)
+	}
+	if agentID == "" {
+		return "", fmt.Errorf("no agent found for channel=%s chatID=%s", msg.Channel, msg.ChatID)
+	}
+
+	r, ok := al.registry.GetRunner(agentID)
+	if !ok {
+		return "", fmt.Errorf("runner not found for agent %q", agentID)
+	}
+
+	sessionKey := msg.SessionKey
+	if sessionKey == "" {
+		sessionKey = SessionKey(msg.TenantID, msg.UserID, msg.Channel)
+	}
+
+	// Ensure session exists.
+	if _, err := al.ensureSession(ctx, msg, sessionKey); err != nil {
+		return "", err
+	}
+
+	// Build user content.
+	content := &genai.Content{
+		Role:  "user",
+		Parts: []*genai.Part{{Text: msg.Content}},
+	}
+
+	// Run agent with automatic compression retry on context overflow.
+	response := al.runAgentWithRetry(ctx, r, msg, sessionKey, content)
+
 	// Check compression — re-fetch session to see events added by runAgent.
 	if al.compressor != nil {
 		freshSess, err := al.sessionService.Get(ctx, &session.GetRequest{
@@ -149,7 +163,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg types.InboundMessag
 		}
 	}
 
-	return nil
+	return response, nil
 }
 
 func (al *AgentLoop) ensureSession(ctx context.Context, msg types.InboundMessage, sessionKey string) (session.Session, error) {
@@ -295,48 +309,7 @@ func (al *AgentLoop) runAgentWithRetry(ctx context.Context, r *runner.Runner, ms
 // ProcessDirect processes a message synchronously and returns the response.
 // Unlike processMessage, it skips bus publishing — designed for the agent CLI mode.
 func (al *AgentLoop) ProcessDirect(ctx context.Context, msg types.InboundMessage) (string, error) {
-	agentID := msg.AgentID
-	if agentID == "" {
-		agentID = al.registry.ResolveRoute(msg)
-	}
-	if agentID == "" {
-		return "", fmt.Errorf("no agent found for channel=%s chatID=%s", msg.Channel, msg.ChatID)
-	}
-
-	r, ok := al.registry.GetRunner(agentID)
-	if !ok {
-		return "", fmt.Errorf("runner not found for agent %q", agentID)
-	}
-
-	sessionKey := msg.SessionKey
-	if sessionKey == "" {
-		sessionKey = SessionKey(msg.TenantID, msg.UserID, msg.Channel)
-	}
-
-	if _, err := al.ensureSession(ctx, msg, sessionKey); err != nil {
-		return "", err
-	}
-
-	content := &genai.Content{
-		Role:  "user",
-		Parts: []*genai.Part{{Text: msg.Content}},
-	}
-
-	response := al.runAgentWithRetry(ctx, r, msg, sessionKey, content)
-
-	// Post-run compression check.
-	if al.compressor != nil {
-		freshSess, err := al.sessionService.Get(ctx, &session.GetRequest{
-			AppName:   al.appName,
-			UserID:    msg.UserID,
-			SessionID: sessionKey,
-		})
-		if err == nil {
-			al.maybeCompress(ctx, freshSess.Session)
-		}
-	}
-
-	return response, nil
+	return al.prepareAndRun(ctx, msg)
 }
 
 func (al *AgentLoop) maybeCompress(ctx context.Context, sess session.Session) {

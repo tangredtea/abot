@@ -14,6 +14,7 @@ type TenantRateLimiter struct {
 	buckets map[string]*bucket
 	rate    float64 // tokens per second
 	burst   int     // max burst size
+	stop    chan struct{}
 }
 
 type bucket struct {
@@ -25,11 +26,50 @@ type bucket struct {
 // rate is tokens per second, burst is the max tokens that can accumulate.
 // Example: rate=1.0, burst=10 means 60 calls/min with burst of 10.
 func NewTenantRateLimiter(rate float64, burst int) *TenantRateLimiter {
-	return &TenantRateLimiter{
+	rl := &TenantRateLimiter{
 		buckets: make(map[string]*bucket),
 		rate:    rate,
 		burst:   burst,
+		stop:    make(chan struct{}),
 	}
+
+	// Start background cleanup goroutine
+	go rl.cleanupLoop()
+
+	return rl
+}
+
+// cleanupLoop periodically removes inactive tenant buckets.
+func (rl *TenantRateLimiter) cleanupLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-rl.stop:
+			return
+		case <-ticker.C:
+			rl.cleanup()
+		}
+	}
+}
+
+// cleanup removes buckets that haven't been used in 10 minutes.
+func (rl *TenantRateLimiter) cleanup() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	for tenantID, b := range rl.buckets {
+		if now.Sub(b.lastCheck) > 10*time.Minute {
+			delete(rl.buckets, tenantID)
+		}
+	}
+}
+
+// Stop stops the cleanup goroutine.
+func (rl *TenantRateLimiter) Stop() {
+	close(rl.stop)
 }
 
 // Allow checks whether the tenant is within rate limits.

@@ -24,10 +24,10 @@ const (
 	apiBase     = "https://discord.com/api/v10"
 
 	// Gateway opcodes.
-	opDispatch  = 0
-	opHeartbeat = 1
-	opIdentify  = 2
-	opHello     = 10
+	opDispatch     = 0
+	opHeartbeat    = 1
+	opIdentify     = 2
+	opHello        = 10
 	opHeartbeatACK = 11
 
 	// Intents: GUILDS | GUILD_MESSAGES | MESSAGE_CONTENT | DIRECT_MESSAGES.

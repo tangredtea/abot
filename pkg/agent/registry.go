@@ -42,6 +42,20 @@ func (r *AgentRegistry) Register(entry *AgentEntry) {
 	}
 }
 
+// Unregister removes an agent and its routes from the registry.
+func (r *AgentRegistry) Unregister(agentID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.agents, agentID)
+	newRoutes := r.routes[:0]
+	for _, route := range r.routes {
+		if route.AgentID != agentID {
+			newRoutes = append(newRoutes, route)
+		}
+	}
+	r.routes = newRoutes
+}
+
 // GetRunner returns the runner for the given agent ID.
 func (r *AgentRegistry) GetRunner(agentID string) (*runner.Runner, bool) {
 	r.mu.RLock()

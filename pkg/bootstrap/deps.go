@@ -28,7 +28,8 @@ import (
 // BuildCoreDeps builds minimal dependencies (no MySQL).
 // Used by abot-agent.
 func BuildCoreDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// Session service
 	sessionSvc, err := NewSessionService(cfg)
@@ -104,7 +105,8 @@ func BuildCoreDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
 // BuildFullDeps builds complete dependencies (with MySQL).
 // Used by abot-server and abot-web.
 func BuildFullDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// Database
 	db, err := NewDatabase(cfg)
