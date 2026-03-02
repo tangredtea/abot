@@ -121,7 +121,11 @@ func (c *Client) Close() error {
 		_ = c.stdin.Close()
 	}
 	if c.cmd != nil && c.cmd.Process != nil {
-		return c.cmd.Process.Kill()
+		if err := c.cmd.Process.Kill(); err != nil {
+			return err
+		}
+		// Wait for process to avoid zombie processes
+		_ = c.cmd.Wait()
 	}
 	return nil
 }
