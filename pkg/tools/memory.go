@@ -24,7 +24,7 @@ const (
 	recencyHalfLifeDays = 7.0
 
 	// Dedup thresholds for save_memory.
-	dedupSameCategory = float32(0.70) // lower bar when category matches
+	dedupSameCategory  = float32(0.70) // lower bar when category matches
 	dedupCrossCategory = float32(0.85) // higher bar across categories
 )
 
@@ -463,4 +463,3 @@ func newDeleteMemory(deps *Deps) tool.Tool {
 	})
 	return t
 }
-

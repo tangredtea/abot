@@ -35,8 +35,8 @@ type SubagentManager struct {
 	bus            types.MessageBus
 	sessionService session.Service
 	appName        string
-	tasks map[string]*SubagentTask
-	mu    sync.RWMutex
+	tasks          map[string]*SubagentTask
+	mu             sync.RWMutex
 	wg             sync.WaitGroup
 }
 
@@ -242,4 +242,3 @@ func (sm *SubagentManager) ListTasks() []types.TaskSummary {
 	}
 	return out
 }
-

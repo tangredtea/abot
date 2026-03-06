@@ -16,12 +16,12 @@ import (
 )
 
 const (
-	webSearchTimeout    = 15 * time.Second
-	webFetchTimeout     = 15 * time.Second
-	maxFetchBytes       = 50 * 1024  // 50KB
-	maxSearchRespBytes  = 256 * 1024 // 256KB
-	maxRedirects        = 5
-	userAgent           = "Mozilla/5.0 (compatible; ABot/1.0)"
+	webSearchTimeout   = 15 * time.Second
+	webFetchTimeout    = 15 * time.Second
+	maxFetchBytes      = 50 * 1024  // 50KB
+	maxSearchRespBytes = 256 * 1024 // 256KB
+	maxRedirects       = 5
+	userAgent          = "Mozilla/5.0 (compatible; ABot/1.0)"
 )
 
 // privateNets contains CIDR ranges that web_fetch must never connect to.
@@ -142,6 +142,7 @@ func ExtractText(html string) string {
 	}
 	return strings.Join(out, "\n")
 }
+
 // duckduckgoSearch queries DuckDuckGo HTML and extracts results.
 func duckduckgoSearch(query string, limit int) ([]webSearchHit, error) {
 	u := "https://html.duckduckgo.com/html/?q=" + url.QueryEscape(query)

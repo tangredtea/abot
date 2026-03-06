@@ -253,4 +253,3 @@ func TestSandboxBinaryPath_SameDirAsExecutable(t *testing.T) {
 		}
 	}
 }
-

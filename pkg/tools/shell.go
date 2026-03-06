@@ -139,5 +139,5 @@ func Truncate(s string, max int) string {
 			break
 		}
 	}
-	return truncated + "\n... (truncated)"
+	return truncated + "\n... (Truncated)"
 }

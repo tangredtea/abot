@@ -469,4 +469,3 @@ func (cb *ContextBuilder) buildRuntimeContext(ctx agent.ReadonlyContext) string 
 
 	return sb.String()
 }
-

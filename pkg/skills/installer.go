@@ -31,10 +31,10 @@ type AvailableSkill struct {
 }
 
 const (
-	installerTimeout     = 15 * time.Second
-	maxSkillFileSize     = 1 * 1024 * 1024 // 1 MB
-	maxSkillsListSize    = 2 * 1024 * 1024 // 2 MB
-	communitySkillsURL   = "https://raw.githubusercontent.com/abot/abot-skills/main/skills.json"
+	installerTimeout   = 15 * time.Second
+	maxSkillFileSize   = 1 * 1024 * 1024 // 1 MB
+	maxSkillsListSize  = 2 * 1024 * 1024 // 2 MB
+	communitySkillsURL = "https://raw.githubusercontent.com/abot/abot-skills/main/skills.json"
 )
 
 // NewSkillInstaller creates a SkillInstaller.
@@ -165,4 +165,3 @@ func (si *SkillInstaller) fetchURL(ctx context.Context, url string, maxSize int)
 	}
 	return body, nil
 }
-

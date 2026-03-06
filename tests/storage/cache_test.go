@@ -157,7 +157,7 @@ func TestLRU_AccessRefreshesOrder(t *testing.T) {
 	c := cache.NewLRU[string, int](2)
 	c.Put("a", 1)
 	c.Put("b", 2)
-	c.Get("a") // refresh "a", now "b" is oldest
+	c.Get("a")    // refresh "a", now "b" is oldest
 	c.Put("c", 3) // should evict "b"
 
 	if _, ok := c.Get("b"); ok {

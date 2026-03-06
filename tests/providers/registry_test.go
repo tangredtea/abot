@@ -142,7 +142,7 @@ func TestParseModelRef_TableDriven(t *testing.T) {
 		{"claude-3-opus", "anthropic", "anthropic", "claude-3-opus"},
 		{"gpt-4o", "openai", "openai", "gpt-4o"},
 		{"gpt/gpt-4o", "", "openai", "gpt-4o"},       // normalized
-		{"claude/sonnet", "", "anthropic", "sonnet"},   // normalized
+		{"claude/sonnet", "", "anthropic", "sonnet"}, // normalized
 	}
 	for _, tt := range tests {
 		ref := providers.ParseModelRef(tt.raw, tt.defProv)

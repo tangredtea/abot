@@ -70,9 +70,9 @@ type Embedder interface {
 
 // VectorEntry represents a single vector record.
 type VectorEntry struct {
-	ID       string
-	Vector   []float32
-	Payload  map[string]any
+	ID      string
+	Vector  []float32
+	Payload map[string]any
 }
 
 // VectorSearchRequest describes a vector similarity search.

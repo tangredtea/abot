@@ -22,22 +22,22 @@ const (
 
 // Model implements model.LLM for the Anthropic Messages API.
 type Model struct {
-	name           string
-	apiKey         string
-	apiBase        string
-	apiVersion     string
-	client         *http.Client
-	promptCaching  bool
+	name          string
+	apiKey        string
+	apiBase       string
+	apiVersion    string
+	client        *http.Client
+	promptCaching bool
 }
 
 // Config holds Anthropic model configuration.
 type Config struct {
-	Name           string // model name, e.g. "claude-sonnet-4-20250514"
-	APIKey         string
-	APIBase        string // defaults to https://api.anthropic.com
-	APIVersion     string // defaults to "2023-06-01"
-	Client         *http.Client
-	PromptCaching  bool   // enable Anthropic prompt caching
+	Name          string // model name, e.g. "claude-sonnet-4-20250514"
+	APIKey        string
+	APIBase       string // defaults to https://api.anthropic.com
+	APIVersion    string // defaults to "2023-06-01"
+	Client        *http.Client
+	PromptCaching bool // enable Anthropic prompt caching
 }
 
 // NewModel creates an Anthropic model.LLM implementation.

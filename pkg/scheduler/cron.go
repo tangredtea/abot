@@ -311,10 +311,10 @@ func (t *tzSchedule) Next(now time.Time) time.Time {
 
 // SchedulerStatus describes a summary of the scheduler's running state.
 type SchedulerStatus struct {
-	Running      bool       `json:"running"`
-	TotalJobs    int        `json:"total_jobs"`
-	EnabledJobs  int        `json:"enabled_jobs"`
-	NextWakeAt   *time.Time `json:"next_wake_at,omitempty"`
+	Running     bool       `json:"running"`
+	TotalJobs   int        `json:"total_jobs"`
+	EnabledJobs int        `json:"enabled_jobs"`
+	NextWakeAt  *time.Time `json:"next_wake_at,omitempty"`
 }
 
 // Status returns a snapshot of the scheduler's current running state.

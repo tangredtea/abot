@@ -143,9 +143,11 @@ func (m *mockVectorStore) Search(_ context.Context, collection string, req *type
 	return nil, nil
 }
 
-func (m *mockVectorStore) Delete(_ context.Context, _ string, _ map[string]any) error              { return nil }
-func (m *mockVectorStore) UpdatePayload(_ context.Context, _ string, _ map[string]any, _ map[string]any) error { return nil }
-func (m *mockVectorStore) Close() error                                                            { return nil }
+func (m *mockVectorStore) Delete(_ context.Context, _ string, _ map[string]any) error { return nil }
+func (m *mockVectorStore) UpdatePayload(_ context.Context, _ string, _ map[string]any, _ map[string]any) error {
+	return nil
+}
+func (m *mockVectorStore) Close() error { return nil }
 
 func (m *mockVectorStore) getEntries(collection string) []types.VectorEntry {
 	m.mu.Lock()
@@ -175,8 +177,8 @@ func (e *mockEmbedder) Dimension() int { return e.dim }
 
 // compile-time checks for multisession types
 var (
-	_ model.LLM        = (*scriptedLLM)(nil)
-	_ model.LLM        = (*toolCallLLM)(nil)
+	_ model.LLM         = (*scriptedLLM)(nil)
+	_ model.LLM         = (*toolCallLLM)(nil)
 	_ types.VectorStore = (*mockVectorStore)(nil)
 	_ types.Embedder    = (*mockEmbedder)(nil)
 )

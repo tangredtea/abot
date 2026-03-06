@@ -20,12 +20,12 @@ func TestCalculateCooldown(t *testing.T) {
 		want  time.Duration
 	}{
 		{0, 0},
-		{1, 1 * time.Minute},          // 5^0 = 1
-		{2, 5 * time.Minute},          // 5^1 = 5
-		{3, 25 * time.Minute},         // 5^2 = 25
-		{4, time.Hour},                // 5^3 = 125min, capped to 1h
-		{5, time.Hour},                // 5^3 = 125min, capped to 1h (exp capped at 3)
-		{100, time.Hour},              // still capped
+		{1, 1 * time.Minute},  // 5^0 = 1
+		{2, 5 * time.Minute},  // 5^1 = 5
+		{3, 25 * time.Minute}, // 5^2 = 25
+		{4, time.Hour},        // 5^3 = 125min, capped to 1h
+		{5, time.Hour},        // 5^3 = 125min, capped to 1h (exp capped at 3)
+		{100, time.Hour},      // still capped
 	}
 	for _, tt := range tests {
 		got := fallback.CalculateCooldown(tt.count)

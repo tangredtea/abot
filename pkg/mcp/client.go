@@ -57,6 +57,7 @@ func NewClient(name string, cfg ServerConfig) *Client {
 	}
 }
 
+
 // Connect starts the MCP server process (stdio) or validates the HTTP endpoint,
 // then performs initialize + tools/list.
 func (c *Client) Connect(ctx context.Context) error {

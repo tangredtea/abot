@@ -412,6 +412,16 @@ func buildDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
 	}
 	slog.Info("builtin skills registered")
 
+	// Warmup always_load skills (preload to cache).
+	if err := skillsLoader.WarmupAlwaysLoad(ctx); err != nil {
+		slog.Warn("skill warmup failed", "error", err)
+	}
+
+	// Cleanup stale cache (30 days).
+	if err := skillsLoader.CleanupStaleCache(30 * 24 * 60 * 60); err != nil {
+		slog.Warn("cache cleanup failed", "error", err)
+	}
+
 	// Vector store + embedder (optional).
 	var vectorStore types.VectorStore
 	var embedder types.Embedder
@@ -443,6 +453,7 @@ func buildDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
 	toolsDeps.VectorStore = vectorStore
 	toolsDeps.Embedder = embedder
 	toolsDeps.MemoryEventStore = stores.memoryEvent
+	toolsDeps.SkillsLoader = skillsLoader
 
 	// Memory consolidation plugin (requires vector store + embedder).
 	var plugins []*plugin.Plugin

@@ -55,11 +55,11 @@ type ChatFunction struct {
 // --- OpenAI ChatCompletion response types ---
 
 type ChatResponse struct {
-	ID      string         `json:"id"`
-	Object  string         `json:"object"`
-	Model   string         `json:"model"`
-	Choices []ChatChoice   `json:"choices"`
-	Usage   *ChatUsage     `json:"usage,omitempty"`
+	ID      string       `json:"id"`
+	Object  string       `json:"object"`
+	Model   string       `json:"model"`
+	Choices []ChatChoice `json:"choices"`
+	Usage   *ChatUsage   `json:"usage,omitempty"`
 }
 
 type ChatChoice struct {

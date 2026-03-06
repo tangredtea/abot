@@ -19,12 +19,12 @@ import (
 
 // Deps holds dependencies for auth handlers.
 type Deps struct {
-	AccountStore    types.AccountStore
-	AccTenantStore  types.AccountTenantStore
-	TenantStore     types.TenantStore
-	WorkspaceStore  types.WorkspaceStore
-	JWTConfig       JWTConfig
-	DB              *gorm.DB
+	AccountStore   types.AccountStore
+	AccTenantStore types.AccountTenantStore
+	TenantStore    types.TenantStore
+	WorkspaceStore types.WorkspaceStore
+	JWTConfig      JWTConfig
+	DB             *gorm.DB
 }
 
 // Handler returns an http.Handler for auth endpoints.

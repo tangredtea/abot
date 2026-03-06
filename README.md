@@ -45,21 +45,18 @@ Bot: Hello! How can I help you today?
 Best for teams and production use.
 
 ```bash
-# Using Docker Compose
-curl -O https://raw.githubusercontent.com/yourusername/abot/main/docker-compose.yml
+# 1. Start backend (port 3001)
+./abot console --config config.test.yaml
 
-# Configure environment
-cat > .env <<EOF
-OPENAI_API_KEY=sk-xxx
-JWT_SECRET=$(openssl rand -hex 32)
-MYSQL_ROOT_PASSWORD=secure-password
-EOF
+# 2. Start frontend (port 3000)
+cd web && npm run dev
 
-# Start services
-docker-compose up -d
-
-# Open browser
+# 3. Open browser
 open http://localhost:3000
+
+# 4. Login with test account
+# Email: test@example.com
+# Password: Test123456
 ```
 
 ### Option 3: API Server (For Integration)

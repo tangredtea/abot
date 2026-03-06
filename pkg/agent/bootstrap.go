@@ -158,7 +158,7 @@ type SessionConfig struct {
 
 // ConsoleConfig holds web console configuration.
 type ConsoleConfig struct {
-	Addr           string   `yaml:"addr"`            // e.g. ":3000"
+	Addr           string   `yaml:"addr"` // e.g. ":3000"
 	JWTSecret      string   `yaml:"jwt_secret"`
 	StaticDir      string   `yaml:"static_dir"`      // e.g. "web/out"
 	AllowedOrigins []string `yaml:"allowed_origins"` // CORS allowed origins

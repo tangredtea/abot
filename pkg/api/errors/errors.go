@@ -11,21 +11,21 @@ import (
 
 // Error codes for different error types.
 const (
-	CodeBadRequest          = "BAD_REQUEST"
-	CodeUnauthorized        = "UNAUTHORIZED"
-	CodeForbidden           = "FORBIDDEN"
-	CodeNotFound            = "NOT_FOUND"
-	CodeConflict            = "CONFLICT"
-	CodeInternalError       = "INTERNAL_ERROR"
-	CodeValidationFailed    = "VALIDATION_FAILED"
-	CodeRateLimitExceeded   = "RATE_LIMIT_EXCEEDED"
-	CodeInvalidCredentials  = "INVALID_CREDENTIALS"
-	CodeAccountSuspended    = "ACCOUNT_SUSPENDED"
-	CodeTokenExpired        = "TOKEN_EXPIRED"
-	CodeEmailAlreadyExists  = "EMAIL_ALREADY_EXISTS"
-	CodeSessionNotFound     = "SESSION_NOT_FOUND"
-	CodeAccessDenied        = "ACCESS_DENIED"
-	CodeEncryptionFailed    = "ENCRYPTION_FAILED"
+	CodeBadRequest         = "BAD_REQUEST"
+	CodeUnauthorized       = "UNAUTHORIZED"
+	CodeForbidden          = "FORBIDDEN"
+	CodeNotFound           = "NOT_FOUND"
+	CodeConflict           = "CONFLICT"
+	CodeInternalError      = "INTERNAL_ERROR"
+	CodeValidationFailed   = "VALIDATION_FAILED"
+	CodeRateLimitExceeded  = "RATE_LIMIT_EXCEEDED"
+	CodeInvalidCredentials = "INVALID_CREDENTIALS"
+	CodeAccountSuspended   = "ACCOUNT_SUSPENDED"
+	CodeTokenExpired       = "TOKEN_EXPIRED"
+	CodeEmailAlreadyExists = "EMAIL_ALREADY_EXISTS"
+	CodeSessionNotFound    = "SESSION_NOT_FOUND"
+	CodeAccessDenied       = "ACCESS_DENIED"
+	CodeEncryptionFailed   = "ENCRYPTION_FAILED"
 )
 
 // AppError represents an application error with context.
@@ -117,7 +117,7 @@ type ErrorResponse struct {
 // It logs the error and returns a JSON response with appropriate status code.
 func HandleError(w http.ResponseWriter, err error) {
 	var appErr *AppError
-	
+
 	// Convert to AppError if not already
 	switch e := err.(type) {
 	case *AppError:
@@ -141,11 +141,11 @@ func logError(err *AppError) {
 		"code", err.Code,
 		"status", err.StatusCode,
 	}
-	
+
 	if err.RequestID != "" {
 		attrs = append(attrs, "request_id", err.RequestID)
 	}
-	
+
 	if err.Err != nil {
 		attrs = append(attrs, "underlying_error", err.Err.Error())
 	}

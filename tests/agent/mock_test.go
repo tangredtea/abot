@@ -116,7 +116,7 @@ func (b *mockBus) getOutbound() []types.OutboundMessage {
 
 // compile-time checks
 var (
-	_ model.LLM       = (*mockLLM)(nil)
+	_ model.LLM        = (*mockLLM)(nil)
 	_ types.MessageBus = (*mockBus)(nil)
 )
 

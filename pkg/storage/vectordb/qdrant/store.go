@@ -13,10 +13,10 @@ import (
 
 // Store implements types.VectorStore backed by Qdrant.
 type Store struct {
-	conn       *grpc.ClientConn
-	points     pb.PointsClient
+	conn        *grpc.ClientConn
+	points      pb.PointsClient
 	collections pb.CollectionsClient
-	dimension  uint64
+	dimension   uint64
 }
 
 // Config holds Qdrant connection parameters.

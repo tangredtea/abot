@@ -29,11 +29,11 @@ func ExtractProtocol(modelStr string) (protocol, modelID string) {
 
 // ModelFactoryConfig holds the configuration needed to create a model.LLM instance.
 type ModelFactoryConfig struct {
-	Model        string // Protocol/model identifier, e.g. "anthropic/claude-sonnet-4.6".
-	APIKey       string
-	APIBase      string
-	Proxy        string // Reserved for future use.
-	PromptCaching bool  // Enable Anthropic prompt caching.
+	Model         string // Protocol/model identifier, e.g. "anthropic/claude-sonnet-4.6".
+	APIKey        string
+	APIBase       string
+	Proxy         string // Reserved for future use.
+	PromptCaching bool   // Enable Anthropic prompt caching.
 }
 
 // CreateModelFromConfig creates a model.LLM based on the protocol prefix in the Model field.
