@@ -104,6 +104,18 @@ type CronJobModel struct {
 
 func (CronJobModel) TableName() string { return "cron_jobs" }
 
+// CronJobLogModel maps to the cron_job_logs table.
+type CronJobLogModel struct {
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	JobID      string    `gorm:"column:job_id;type:varchar(128);index"`
+	RunAt      time.Time `gorm:"column:run_at;index"`
+	DurationMs int64     `gorm:"column:duration_ms"`
+	Status     string    `gorm:"column:status;type:varchar(32)"`
+	Error      string    `gorm:"column:error;type:text"`
+}
+
+func (CronJobLogModel) TableName() string { return "cron_job_logs" }
+
 // AgentRouteModel maps to the agent_routes table.
 type AgentRouteModel struct {
 	AgentID   string `gorm:"column:agent_id;type:varchar(128);primaryKey"`
@@ -200,6 +212,15 @@ type AgentChannelModel struct {
 
 func (AgentChannelModel) TableName() string { return "agent_channels" }
 
+// AllowlistModel maps to the sender_allowlist table.
+type AllowlistModel struct {
+	TenantID string `gorm:"column:tenant_id;type:varchar(128);primaryKey"`
+	ChatID   string `gorm:"column:chat_id;type:varchar(128);primaryKey"`
+	Entry    JSON   `gorm:"column:entry;type:json"`
+}
+
+func (AllowlistModel) TableName() string { return "sender_allowlist" }
+
 // --- JSON helper type for GORM ---
 
 // JSON is a json.RawMessage wrapper that implements GORM's Scanner/Valuer.
@@ -236,6 +257,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&TenantSkillModel{},
 		&SkillProposalModel{},
 		&CronJobModel{},
+		&CronJobLogModel{},
 		&AgentRouteModel{},
 		&MemoryEventModel{},
 		&AccountModel{},
@@ -243,5 +265,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&ChatSessionModel{},
 		&AgentDefinitionModel{},
 		&AgentChannelModel{},
+		&AllowlistModel{},
 	)
 }

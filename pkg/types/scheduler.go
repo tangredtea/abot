@@ -43,3 +43,13 @@ type CronJobState struct {
 	LastStatus string
 	LastError  string
 }
+
+// CronJobLog records a single execution of a cron job.
+type CronJobLog struct {
+	ID         int64
+	JobID      string
+	RunAt      time.Time
+	DurationMs int64
+	Status     string
+	Error      string
+}

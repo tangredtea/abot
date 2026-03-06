@@ -100,9 +100,23 @@ func newSaveMemory(deps *Deps) tool.Tool {
 			return saveMemoryResult{Error: fmt.Sprintf("ensure collection: %v", err)}, nil
 		}
 
-		vecs, err := deps.Embedder.Embed(ctx, []string{args.Content})
-		if err != nil {
-			return saveMemoryResult{Error: fmt.Sprintf("embed: %v", err)}, nil
+		// Use embedding cache if available
+		var vec []float32
+		if deps.EmbeddingCache != nil {
+			if cached, ok := deps.EmbeddingCache.Get(args.Content); ok {
+				vec = cached
+			}
+		}
+
+		if vec == nil {
+			vecs, err := deps.Embedder.Embed(ctx, []string{args.Content})
+			if err != nil {
+				return saveMemoryResult{Error: fmt.Sprintf("embed: %v", err)}, nil
+			}
+			vec = vecs[0]
+			if deps.EmbeddingCache != nil {
+				deps.EmbeddingCache.Set(args.Content, vec)
+			}
 		}
 
 		category := args.Category
@@ -132,11 +146,11 @@ func newSaveMemory(deps *Deps) tool.Tool {
 			dedupFilter["user_id"] = userID
 		}
 		if similar, err := deps.VectorStore.Search(ctx, collection, &types.VectorSearchRequest{
-			Vector: vecs[0],
+			Vector: vec,
 			Filter: dedupFilter,
 			TopK:   5,
 		}); err == nil {
-			zeroVec := make([]float32, len(vecs[0]))
+			zeroVec := make([]float32, len(vec))
 			for _, s := range similar {
 				oldCat, _ := s.Payload["category"].(string)
 				threshold := dedupCrossCategory
@@ -183,7 +197,7 @@ func newSaveMemory(deps *Deps) tool.Tool {
 
 		if err := deps.VectorStore.Upsert(ctx, collection, []types.VectorEntry{{
 			ID:      id,
-			Vector:  vecs[0],
+			Vector:  vec,
 			Payload: payload,
 		}}); err != nil {
 			return saveMemoryResult{Error: fmt.Sprintf("upsert: %v", err)}, nil
@@ -235,9 +249,23 @@ func newSearchMemory(deps *Deps) tool.Tool {
 
 		collection := fmt.Sprintf("tenant_%s", tenantID)
 
-		vecs, err := deps.Embedder.Embed(ctx, []string{args.Query})
-		if err != nil {
-			return searchMemoryResult{Error: fmt.Sprintf("embed: %v", err)}, nil
+		// Use embedding cache if available
+		var vec []float32
+		if deps.EmbeddingCache != nil {
+			if cached, ok := deps.EmbeddingCache.Get(args.Query); ok {
+				vec = cached
+			}
+		}
+
+		if vec == nil {
+			vecs, err := deps.Embedder.Embed(ctx, []string{args.Query})
+			if err != nil {
+				return searchMemoryResult{Error: fmt.Sprintf("embed: %v", err)}, nil
+			}
+			vec = vecs[0]
+			if deps.EmbeddingCache != nil {
+				deps.EmbeddingCache.Set(args.Query, vec)
+			}
 		}
 
 		// Two-pass search: tenant-scope + user-scope, merged for re-ranking.
@@ -254,7 +282,7 @@ func newSearchMemory(deps *Deps) tool.Tool {
 		}
 
 		tenantResults, err := deps.VectorStore.Search(ctx, collection, &types.VectorSearchRequest{
-			Vector: vecs[0],
+			Vector: vec,
 			Filter: tenantFilter,
 			TopK:   15,
 		})
@@ -262,7 +290,7 @@ func newSearchMemory(deps *Deps) tool.Tool {
 			return searchMemoryResult{Error: fmt.Sprintf("search tenant: %v", err)}, nil
 		}
 		userResults, err := deps.VectorStore.Search(ctx, collection, &types.VectorSearchRequest{
-			Vector: vecs[0],
+			Vector: vec,
 			Filter: userFilter,
 			TopK:   15,
 		})
@@ -295,11 +323,22 @@ func newSearchMemory(deps *Deps) tool.Tool {
 				continue
 			}
 
-			// Mixed scoring: semantic + recency + salience.
+			// Mixed scoring: semantic + BM25 + recency + salience.
 			semantic := float64(r.Score)
+			bm25 := 0.0
+			if deps.BM25Scorer != nil {
+				bm25 = deps.BM25Scorer.Score(args.Query, text)
+			}
 			recency := recencyScore(createdAt, perm)
 			salience := salienceScore(accessCnt)
-			mixed := wSemantic*semantic + wRecency*recency + wSalience*salience
+
+			// Adjust weights when BM25 is available
+			var mixed float64
+			if deps.BM25Scorer != nil {
+				mixed = 0.40*semantic + 0.30*bm25 + 0.20*recency + 0.10*salience
+			} else {
+				mixed = wSemantic*semantic + wRecency*recency + wSalience*salience
+			}
 
 			hits = append(hits, memoryHit{
 				Category:  cat,
@@ -314,6 +353,11 @@ func newSearchMemory(deps *Deps) tool.Tool {
 		sort.Slice(hits, func(i, j int) bool {
 			return hits[i].Score > hits[j].Score
 		})
+
+		// Apply MMR for diversity (lambda=0.7: 70% relevance, 30% diversity).
+		if len(hits) > 1 {
+			hits = applyMMR(hits, 0.7)
+		}
 
 		// Cap to top 10.
 		if len(hits) > 10 {
@@ -420,9 +464,23 @@ func newDeleteMemory(deps *Deps) tool.Tool {
 			return deleteMemoryResult{Error: "provide query or set clear_all=true"}, nil
 		}
 
-		vecs, err := deps.Embedder.Embed(ctx, []string{args.Query})
-		if err != nil {
-			return deleteMemoryResult{Error: fmt.Sprintf("embed: %v", err)}, nil
+		// Use embedding cache if available
+		var vec []float32
+		if deps.EmbeddingCache != nil {
+			if cached, ok := deps.EmbeddingCache.Get(args.Query); ok {
+				vec = cached
+			}
+		}
+
+		if vec == nil {
+			vecs, err := deps.Embedder.Embed(ctx, []string{args.Query})
+			if err != nil {
+				return deleteMemoryResult{Error: fmt.Sprintf("embed: %v", err)}, nil
+			}
+			vec = vecs[0]
+			if deps.EmbeddingCache != nil {
+				deps.EmbeddingCache.Set(args.Query, vec)
+			}
 		}
 
 		delFilter := map[string]any{"superseded": false}
@@ -430,7 +488,7 @@ func newDeleteMemory(deps *Deps) tool.Tool {
 			delFilter["user_id"] = userID
 		}
 		results, err := deps.VectorStore.Search(ctx, collection, &types.VectorSearchRequest{
-			Vector: vecs[0],
+			Vector: vec,
 			Filter: delFilter,
 			TopK:   5,
 		})
@@ -439,7 +497,7 @@ func newDeleteMemory(deps *Deps) tool.Tool {
 		}
 
 		deleted := 0
-		zeroVec := make([]float32, len(vecs[0]))
+		zeroVec := make([]float32, len(vec))
 		for _, r := range results {
 			if r.Score < 0.60 {
 				continue
@@ -462,4 +520,69 @@ func newDeleteMemory(deps *Deps) tool.Tool {
 		return deleteMemoryResult{Result: fmt.Sprintf("deleted %d memories", deleted)}, nil
 	})
 	return t
+}
+
+// applyMMR applies Maximal Marginal Relevance to diversify results.
+// lambda controls relevance vs diversity tradeoff (0.7 = 70% relevance, 30% diversity).
+func applyMMR(hits []memoryHit, lambda float64) []memoryHit {
+	if len(hits) <= 1 {
+		return hits
+	}
+
+	selected := []memoryHit{hits[0]}
+	remaining := hits[1:]
+
+	for len(remaining) > 0 && len(selected) < 10 {
+		bestIdx := -1
+		bestMMR := -1e9
+
+		for i, cand := range remaining {
+			maxSim := 0.0
+			for _, sel := range selected {
+				sim := jaccardSimilarity(cand.Text, sel.Text)
+				if sim > maxSim {
+					maxSim = sim
+				}
+			}
+			mmr := lambda*cand.Score - (1-lambda)*maxSim
+			if mmr > bestMMR {
+				bestMMR = mmr
+				bestIdx = i
+			}
+		}
+
+		if bestIdx < 0 {
+			break
+		}
+		selected = append(selected, remaining[bestIdx])
+		remaining = append(remaining[:bestIdx], remaining[bestIdx+1:]...)
+	}
+
+	return selected
+}
+
+// jaccardSimilarity calculates Jaccard similarity between two texts.
+func jaccardSimilarity(a, b string) float64 {
+	setA := make(map[string]struct{})
+	setB := make(map[string]struct{})
+
+	for _, w := range strings.Fields(strings.ToLower(a)) {
+		setA[w] = struct{}{}
+	}
+	for _, w := range strings.Fields(strings.ToLower(b)) {
+		setB[w] = struct{}{}
+	}
+
+	intersection := 0
+	for w := range setA {
+		if _, ok := setB[w]; ok {
+			intersection++
+		}
+	}
+
+	union := len(setA) + len(setB) - intersection
+	if union == 0 {
+		return 0
+	}
+	return float64(intersection) / float64(union)
 }

@@ -94,6 +94,8 @@ type Deps struct {
 	Subagent            SubagentSpawner // Optional; nil disables subagent/list_tasks tools.
 	VectorStore         types.VectorStore
 	Embedder            types.Embedder
+	EmbeddingCache      types.EmbeddingCache // Optional; nil disables caching
+	BM25Scorer          types.BM25Scorer     // Optional; nil disables BM25 scoring
 	MemoryEventStore    types.MemoryEventStore
 	WorkspaceDir        string
 	DenyPatterns        []string

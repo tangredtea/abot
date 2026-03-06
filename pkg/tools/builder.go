@@ -31,7 +31,6 @@ func BuildAllTools(deps *Deps) ([]tool.Tool, error) {
 		{"promote_skill", newPromoteSkill(deps)},
 		{"save_memory", newSaveMemory(deps)},
 		{"search_memory", newSearchMemory(deps)},
-		{"update_doc", newUpdateDoc(deps)},
 	}
 
 	if deps.Subagent != nil {

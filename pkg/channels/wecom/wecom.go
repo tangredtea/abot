@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"abot/pkg/channels"
@@ -27,96 +26,13 @@ const (
 	shutdownTimeout = 5 * time.Second
 )
 
-// dedupCache is a TTL-based message deduplication cache with background cleanup.
-type dedupCache struct {
-	mu      sync.Mutex
-	entries map[string]time.Time
-	ttl     time.Duration
-	maxSize int
-	stop    chan struct{}
-}
-
-const defaultDedupMaxSize = 100000
-
-func NewDedupCache(ttl time.Duration) *dedupCache {
-	d := &dedupCache{
-		entries: make(map[string]time.Time),
-		ttl:     ttl,
-		maxSize: defaultDedupMaxSize,
-		stop:    make(chan struct{}),
-	}
-	go d.backgroundCleanup()
-	return d
-}
-
-// Check returns true if id was already seen (duplicate).
-func (d *dedupCache) Check(id string) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if _, ok := d.entries[id]; ok {
-		return true
-	}
-	// Evict oldest if at capacity.
-	if len(d.entries) >= d.maxSize {
-		d.evictOldest()
-	}
-	d.entries[id] = time.Now()
-	return false
-}
-
-// Close stops the background cleanup goroutine.
-func (d *dedupCache) Close() {
-	select {
-	case <-d.stop:
-	default:
-		close(d.stop)
-	}
-}
-
-func (d *dedupCache) backgroundCleanup() {
-	ticker := time.NewTicker(d.ttl)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-d.stop:
-			return
-		case <-ticker.C:
-			d.mu.Lock()
-			d.cleanup()
-			d.mu.Unlock()
-		}
-	}
-}
-
-func (d *dedupCache) cleanup() {
-	cutoff := time.Now().Add(-d.ttl)
-	for k, t := range d.entries {
-		if t.Before(cutoff) {
-			delete(d.entries, k)
-		}
-	}
-}
-
-func (d *dedupCache) evictOldest() {
-	var oldestKey string
-	var oldestTime time.Time
-	for k, t := range d.entries {
-		if oldestKey == "" || t.Before(oldestTime) {
-			oldestKey = k
-			oldestTime = t
-		}
-	}
-	if oldestKey != "" {
-		delete(d.entries, oldestKey)
-	}
-}
 
 // WeComChannel implements types.Channel for WeCom Bot (企业微信智能机器人).
 type WeComChannel struct {
 	*channels.BaseChannel
 	config   WeComConfig
 	server   *http.Server
-	dedup    *dedupCache
+	dedup    *channels.DedupCache
 	tenantID string
 	userID   string
 	ctx      context.Context
@@ -132,7 +48,7 @@ func NewWeComChannel(cfg WeComConfig, bus types.MessageBus) (*WeComChannel, erro
 	return &WeComChannel{
 		BaseChannel: channels.NewBaseChannel(ChannelName, bus, cfg.AllowFrom),
 		config:      cfg,
-		dedup:       NewDedupCache(dedupTTL),
+		dedup:       channels.NewDedupCache(dedupTTL),
 		tenantID:    cfg.TenantID,
 		userID:      cfg.UserID,
 		sem:         semaphore.NewWeighted(100), // Limit concurrent message processing

@@ -1,0 +1,16 @@
+{
+  "default": {
+    "allow": ["*"],
+    "mode": "trigger"
+  },
+  "chats": {
+    "group123": {
+      "allow": ["admin1", "admin2"],
+      "mode": "drop"
+    },
+    "group456": {
+      "allow": ["user1", "user2", "user3"],
+      "mode": "trigger"
+    }
+  }
+}

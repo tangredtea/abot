@@ -18,10 +18,40 @@ import (
 func IsAllowedDocType(dt string) bool { return allowedDocTypes[dt] }
 
 var allowedDocTypes = map[string]bool{
-	"IDENTITY": true,
-	"SOUL":     true,
-	"AGENT":    true,
-	"USER":     true,
+	"IDENTITY":    true,
+	"SOUL":        true,
+	"AGENT":       true,
+	"USER":        true,
+	"TOOLS":       true,
+	"EXPERIMENTS": true,
+	"NOTES":       true,
+}
+
+// personaFileMap maps filenames to doc types
+var personaFileMap = map[string]string{
+	"IDENTITY.md":    "IDENTITY",
+	"SOUL.md":        "SOUL",
+	"AGENT.md":       "AGENT",
+	"USER.md":        "USER",
+	"TOOLS.md":       "TOOLS",
+	"EXPERIMENTS.md": "EXPERIMENTS",
+	"NOTES.md":       "NOTES",
+}
+
+// IsPersonaFile checks if a filename is a persona file
+func IsPersonaFile(filename string) bool {
+	_, ok := personaFileMap[filename]
+	return ok
+}
+
+// FilenameToDocType converts filename to doc type
+func FilenameToDocType(filename string) string {
+	return personaFileMap[filename]
+}
+
+// DocTypeToFilename converts doc type to filename
+func DocTypeToFilename(docType string) string {
+	return docType + ".md"
 }
 
 type updateDocArgs struct {

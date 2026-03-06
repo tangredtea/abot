@@ -215,6 +215,8 @@ func (s *CronService) fireDueJobs(ctx context.Context) {
 
 // fireJob publishes a job's message to the bus and updates state.
 func (s *CronService) fireJob(ctx context.Context, job *types.CronJob, now time.Time) {
+	startTime := time.Now()
+
 	msg := types.InboundMessage{
 		Channel:   job.Channel,
 		TenantID:  job.TenantID,
@@ -226,6 +228,7 @@ func (s *CronService) fireJob(ctx context.Context, job *types.CronJob, now time.
 	}
 
 	err := s.bus.PublishInbound(ctx, msg)
+	durationMs := time.Since(startTime).Milliseconds()
 
 	s.mu.Lock()
 	job.State.LastRunAt = now
@@ -242,6 +245,7 @@ func (s *CronService) fireJob(ctx context.Context, job *types.CronJob, now time.
 		delete(s.jobs, job.ID)
 		s.mu.Unlock()
 		_ = s.store.DeleteJob(ctx, job.ID)
+		s.logExecution(ctx, job.ID, now, durationMs, err)
 		return
 	}
 
@@ -249,6 +253,21 @@ func (s *CronService) fireJob(ctx context.Context, job *types.CronJob, now time.
 	s.mu.Unlock()
 
 	_ = s.store.UpdateJobState(ctx, job.ID, &job.State)
+	s.logExecution(ctx, job.ID, now, durationMs, err)
+}
+
+func (s *CronService) logExecution(ctx context.Context, jobID string, runAt time.Time, durationMs int64, err error) {
+	log := &types.CronJobLog{
+		JobID:      jobID,
+		RunAt:      runAt,
+		DurationMs: durationMs,
+		Status:     "ok",
+	}
+	if err != nil {
+		log.Status = "error"
+		log.Error = err.Error()
+	}
+	_ = s.store.LogExecution(ctx, log)
 }
 
 // ComputeNextRun calculates the next execution time for a job.

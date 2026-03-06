@@ -68,6 +68,20 @@ type Embedder interface {
 	Dimension() int
 }
 
+// EmbeddingCache provides caching for embeddings to reduce API costs.
+type EmbeddingCache interface {
+	Get(text string) ([]float32, bool)
+	Set(text string, vec []float32)
+	Clear()
+	Size() int
+}
+
+// BM25Scorer provides BM25 keyword scoring for hybrid retrieval.
+type BM25Scorer interface {
+	Score(query, doc string) float64
+	UpdateStats(docCount int, avgDocLen float64, termDocFreq map[string]int)
+}
+
 // VectorEntry represents a single vector record.
 type VectorEntry struct {
 	ID      string
@@ -107,6 +121,8 @@ type SchedulerStore interface {
 	ListJobs(ctx context.Context, tenantID string) ([]*CronJob, error)
 	DeleteJob(ctx context.Context, jobID string) error
 	UpdateJobState(ctx context.Context, jobID string, state *CronJobState) error
+	LogExecution(ctx context.Context, log *CronJobLog) error
+	ListLogs(ctx context.Context, jobID string, limit int) ([]*CronJobLog, error)
 }
 
 // AgentStore persists agent definitions.
