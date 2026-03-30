@@ -61,9 +61,9 @@ func (s *CronService) Start(ctx context.Context) error {
 		}
 		s.jobs[j.ID] = j
 	}
+	ctx, s.cancel = context.WithCancel(ctx)
 	s.mu.Unlock()
 
-	ctx, s.cancel = context.WithCancel(ctx)
 	go s.loop(ctx)
 
 	s.logger.Info("scheduler started", "jobs", len(jobs))
@@ -72,8 +72,11 @@ func (s *CronService) Start(ctx context.Context) error {
 
 // Stop cancels the scheduling loop and waits for it to exit.
 func (s *CronService) Stop() error {
-	if s.cancel != nil {
-		s.cancel()
+	s.mu.Lock()
+	cancel := s.cancel
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
 	<-s.done
 	return nil
@@ -215,6 +218,8 @@ func (s *CronService) fireDueJobs(ctx context.Context) {
 
 // fireJob publishes a job's message to the bus and updates state.
 func (s *CronService) fireJob(ctx context.Context, job *types.CronJob, now time.Time) {
+	startTime := time.Now()
+
 	msg := types.InboundMessage{
 		Channel:   job.Channel,
 		TenantID:  job.TenantID,
@@ -226,6 +231,7 @@ func (s *CronService) fireJob(ctx context.Context, job *types.CronJob, now time.
 	}
 
 	err := s.bus.PublishInbound(ctx, msg)
+	durationMs := time.Since(startTime).Milliseconds()
 
 	s.mu.Lock()
 	job.State.LastRunAt = now
@@ -242,6 +248,7 @@ func (s *CronService) fireJob(ctx context.Context, job *types.CronJob, now time.
 		delete(s.jobs, job.ID)
 		s.mu.Unlock()
 		_ = s.store.DeleteJob(ctx, job.ID)
+		s.logExecution(ctx, job.ID, now, durationMs, err)
 		return
 	}
 
@@ -249,6 +256,21 @@ func (s *CronService) fireJob(ctx context.Context, job *types.CronJob, now time.
 	s.mu.Unlock()
 
 	_ = s.store.UpdateJobState(ctx, job.ID, &job.State)
+	s.logExecution(ctx, job.ID, now, durationMs, err)
+}
+
+func (s *CronService) logExecution(ctx context.Context, jobID string, runAt time.Time, durationMs int64, err error) {
+	log := &types.CronJobLog{
+		JobID:      jobID,
+		RunAt:      runAt,
+		DurationMs: durationMs,
+		Status:     "ok",
+	}
+	if err != nil {
+		log.Status = "error"
+		log.Error = err.Error()
+	}
+	_ = s.store.LogExecution(ctx, log)
 }
 
 // ComputeNextRun calculates the next execution time for a job.
@@ -311,10 +333,10 @@ func (t *tzSchedule) Next(now time.Time) time.Time {
 
 // SchedulerStatus describes a summary of the scheduler's running state.
 type SchedulerStatus struct {
-	Running      bool       `json:"running"`
-	TotalJobs    int        `json:"total_jobs"`
-	EnabledJobs  int        `json:"enabled_jobs"`
-	NextWakeAt   *time.Time `json:"next_wake_at,omitempty"`
+	Running     bool       `json:"running"`
+	TotalJobs   int        `json:"total_jobs"`
+	EnabledJobs int        `json:"enabled_jobs"`
+	NextWakeAt  *time.Time `json:"next_wake_at,omitempty"`
 }
 
 // Status returns a snapshot of the scheduler's current running state.

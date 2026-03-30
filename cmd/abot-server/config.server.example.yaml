@@ -27,17 +27,26 @@ bus_buffer_size: 100
 console:
   addr: ":3000"
   jwt_secret: "change-me-to-a-random-secret-at-least-32-chars"
+  encryption_secret: "change-me-to-a-different-secret-at-least-32-chars"
   allowed_origins:
     - "http://localhost:3001"  # Your frontend app
     - "https://yourdomain.com"
     # - "*"  # Allow all origins (not recommended for production)
 
-# Optional: Sandbox configuration (Linux only)
+# Optional: Sandbox configuration
 # sandbox:
-#   level: "standard"           # none / standard / strict
-#   sandbox_binary: ""          # path to abot-sandbox (auto-detected if empty)
+#   # Landlock (application-layer, Linux only):
+#   # level: "standard"           # none / standard / strict
+#   # sandbox_binary: ""          # path to abot-sandbox (auto-detected if empty)
+#   #
+#   # Container (Docker/gVisor, recommended for multi-tenant):
+#   level: "container"
+#   container_runtime: "runsc"        # gVisor syscall-level isolation
+#   container_image: "abot/sandbox:latest"
+#   container_mem_mb: 512
+#   container_cpus: "0.5"
+#   container_pids: 256
+#   container_network: "none"         # "none" / Docker network name
+#   container_tmp_mb: 100
+#   container_workspace_root: ""     # DooD mode: host-side workspace path
 #   restrict_to_workspace: true
-#   exec_memory_mb: 512
-#   exec_cpu_seconds: 30
-#   exec_filesize_mb: 50
-#   exec_nproc: 64

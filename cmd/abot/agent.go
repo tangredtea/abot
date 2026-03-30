@@ -15,25 +15,26 @@ import (
 	"github.com/google/uuid"
 
 	"abot/pkg/agent"
+	"abot/pkg/bootstrap"
 	"abot/pkg/types"
 )
 
-// buildDepsForAgent builds all dependencies but with no channels.
-// Agent mode drives the agent loop directly via ProcessDirect.
-func buildDepsForAgent(cfg *agent.Config) (*agent.BootstrapDeps, error) {
-	deps, err := buildDeps(cfg)
-	if err != nil {
-		return nil, err
+func runAgent(cfg *agent.Config) error {
+	var deps *agent.BootstrapDeps
+	if cfg.MySQLDSN != "" {
+		result, err := bootstrap.BuildFullDeps(cfg)
+		if err != nil {
+			return fmt.Errorf("build deps: %w", err)
+		}
+		deps = result.Deps
+	} else {
+		var err error
+		deps, err = bootstrap.BuildCoreDeps(cfg)
+		if err != nil {
+			return fmt.Errorf("build deps: %w", err)
+		}
 	}
 	deps.Channels = nil
-	return deps, nil
-}
-
-func runAgent(cfg *agent.Config) error {
-	deps, err := buildDepsForAgent(cfg)
-	if err != nil {
-		return fmt.Errorf("build deps: %w", err)
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
