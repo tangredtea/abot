@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>abot · 方案B — 柔和现代</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f6f4f1;--white:#ffffff;--surface:#faf9f7;
+  --border:#e8e4df;--border-light:#f0ece7;
+  --text:#2c2825;--text-dim:#7a7470;--text-muted:#b0a8a0;
+  --blue:#3a6df0;--blue-light:#eef3ff;--blue-dim:#5580f0;
+  --teal:#1a9a7a;--teal-light:#e8f8f2;
+  --orange:#e08030;--orange-light:#fff4ea;
+  --purple:#7c5af0;--purple-light:#f2eeff;
+  --pink:#e05090;--pink-light:#fff0f5;
+  --radius:16px;
+  --font:'Outfit','Noto Sans SC',-apple-system,sans-serif;
+}
+html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+::selection{background:var(--blue-light);color:var(--blue)}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* ─── Sidebar ─── */
+.sidebar{width:300px;background:var(--white);border-right:1px solid var(--border-light);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:20px;border-bottom:1px solid var(--border-light)}
+.logo{font-size:20px;font-weight:700;letter-spacing:-.5px;display:flex;align-items:center;gap:10px;color:var(--text)}
+.logo-icon{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;box-shadow:0 4px 12px rgba(58,109,240,.25)}
+.new-chat-btn{width:100%;margin-top:14px;padding:11px 16px;background:var(--blue);border:none;color:white;border-radius:12px;font-family:var(--font);font-size:13.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;box-shadow:0 2px 8px rgba(58,109,240,.2)}
+.new-chat-btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(58,109,240,.3)}
+.new-chat-btn svg{width:16px;height:16px}
+
+/* Agents Row */
+.agents-row{padding:16px 20px;border-bottom:1px solid var(--border-light)}
+.agents-row-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-muted);margin-bottom:10px}
+.agents-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.agents-scroll::-webkit-scrollbar{height:0}
+.agent-pill{display:flex;align-items:center;gap:7px;padding:8px 14px;background:var(--surface);border:1.5px solid var(--border-light);border-radius:24px;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.agent-pill:hover{border-color:var(--blue);background:var(--blue-light)}
+.agent-pill.active{border-color:var(--blue);background:var(--blue-light);box-shadow:0 2px 8px rgba(58,109,240,.1)}
+.agent-pill .emoji{font-size:18px}
+.agent-pill .label{font-size:12.5px;font-weight:500;color:var(--text)}
+.agent-pill .status{width:7px;height:7px;border-radius:50%;background:var(--teal)}
+
+.sidebar-sessions{flex:1;overflow-y:auto;padding:12px}
+.session-group-label{font-size:11px;font-weight:500;color:var(--text-muted);padding:8px 8px 6px;letter-spacing:.3px}
+.session-card{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;cursor:pointer;transition:all .15s;margin-bottom:2px}
+.session-card:hover{background:var(--surface)}
+.session-card.active{background:var(--blue-light);border:1px solid rgba(58,109,240,.15)}
+.session-icon{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.session-icon.c1{background:var(--teal-light)}
+.session-icon.c2{background:var(--orange-light)}
+.session-icon.c3{background:var(--purple-light)}
+.session-icon.c4{background:var(--pink-light)}
+.session-text{flex:1;min-width:0}
+.session-text h4{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.session-text p{font-size:11.5px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.session-time{font-size:10.5px;color:var(--text-muted);flex-shrink:0}
+
+/* ─── Main ─── */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.chat-header{padding:16px 32px;background:var(--white);border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between}
+.chat-title{display:flex;align-items:center;gap:12px}
+.chat-title-icon{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--teal-light),#d0f0e8);display:flex;align-items:center;justify-content:center;font-size:22px}
+.chat-title h2{font-size:16px;font-weight:600;letter-spacing:-.3px}
+.chat-title p{font-size:12px;color:var(--text-dim);margin-top:1px}
+.chat-actions{display:flex;gap:6px}
+.chat-action-btn{padding:8px 14px;background:var(--surface);border:1.5px solid var(--border);color:var(--text-dim);border-radius:10px;font-size:12.5px;font-family:var(--font);font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px}
+.chat-action-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-light)}
+.chat-action-btn svg{width:14px;height:14px}
+
+/* Messages */
+.messages{flex:1;overflow-y:auto;padding:28px 32px}
+.msg{display:flex;gap:14px;margin-bottom:24px;max-width:760px;animation:slideUp .35s ease both}
+.msg.user{flex-direction:row-reverse;margin-left:auto}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1}}
+.msg-ava{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.msg.assistant .msg-ava{background:var(--teal-light);border:1.5px solid rgba(26,154,122,.15)}
+.msg.user .msg-ava{background:var(--blue);color:white;font-weight:600;font-size:13px}
+.msg-content{flex:1;min-width:0}
+.msg-meta{font-size:11px;color:var(--text-muted);margin-bottom:5px;font-weight:500}
+.msg.user .msg-meta{text-align:right}
+.msg-text{padding:14px 18px;border-radius:16px;font-size:13.5px;line-height:1.7}
+.msg.assistant .msg-text{background:var(--white);border:1px solid var(--border-light);border-top-left-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.msg.user .msg-text{background:var(--blue);color:white;border-top-right-radius:4px;box-shadow:0 2px 8px rgba(58,109,240,.15)}
+.msg-text strong{font-weight:600}
+.msg-text code{font-family:'JetBrains Mono',monospace;font-size:12px;background:rgba(0,0,0,.06);padding:2px 6px;border-radius:5px}
+.msg.user .msg-text code{background:rgba(255,255,255,.2)}
+
+.tool-pill{display:inline-flex;align-items:center;gap:5px;margin:8px 0 4px;padding:6px 12px;background:var(--purple-light);border:1px solid rgba(124,90,240,.15);border-radius:8px;font-size:11.5px;color:var(--purple);font-weight:500}
+.tool-pill svg{width:13px;height:13px}
+
+/* Input */
+.input-area{padding:16px 32px 28px;background:var(--bg)}
+.input-box{display:flex;align-items:flex-end;gap:10px;background:var(--white);border:1.5px solid var(--border);border-radius:18px;padding:6px 6px 6px 20px;transition:all .2s;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.input-box:focus-within{border-color:var(--blue);box-shadow:0 4px 20px rgba(58,109,240,.1)}
+.input-box textarea{flex:1;background:none;border:none;color:var(--text);font-family:var(--font);font-size:14px;resize:none;outline:none;padding:8px 0;min-height:20px;max-height:120px;line-height:1.5}
+.input-box textarea::placeholder{color:var(--text-muted)}
+.input-tools{display:flex;gap:4px;margin-bottom:4px}
+.input-tool-btn{width:32px;height:32px;border-radius:8px;background:none;border:none;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.input-tool-btn:hover{background:var(--surface);color:var(--text-dim)}
+.input-tool-btn svg{width:18px;height:18px}
+.send-btn{width:40px;height:40px;border-radius:12px;background:var(--blue);border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;box-shadow:0 2px 8px rgba(58,109,240,.25)}
+.send-btn:hover{transform:scale(1.05);box-shadow:0 4px 16px rgba(58,109,240,.35)}
+.send-btn svg{width:18px;height:18px}
+
+/* ─── Empty State ─── */
+.empty-state{display:none;flex:1;flex-direction:column;align-items:center;justify-content:center;padding:40px}
+.empty-greeting{font-size:32px;font-weight:700;letter-spacing:-.8px;margin-bottom:8px;background:linear-gradient(135deg,var(--text),var(--text-dim));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.empty-sub{color:var(--text-dim);font-size:15px;margin-bottom:36px}
+.suggestion-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;max-width:520px;width:100%}
+.suggestion-card{padding:16px 18px;background:var(--white);border:1.5px solid var(--border-light);border-radius:14px;cursor:pointer;transition:all .2s;text-align:left}
+.suggestion-card:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.06)}
+.suggestion-card .icon{font-size:24px;margin-bottom:8px}
+.suggestion-card h4{font-size:13px;font-weight:600;margin-bottom:3px}
+.suggestion-card p{font-size:11.5px;color:var(--text-dim);line-height:1.4}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon">A</div>
+        abot
+      </div>
+      <button class="new-chat-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新建对话
+      </button>
+    </div>
+
+    <div class="agents-row">
+      <div class="agents-row-label">我的 Agents</div>
+      <div class="agents-scroll">
+        <div class="agent-pill active"><span class="emoji">🧠</span><span class="label">研发助手</span><span class="status"></span></div>
+        <div class="agent-pill"><span class="emoji">📊</span><span class="label">数据分析</span><span class="status"></span></div>
+        <div class="agent-pill"><span class="emoji">✍️</span><span class="label">文案创作</span><span class="status"></span></div>
+        <div class="agent-pill"><span class="emoji">🎨</span><span class="label">设计顾问</span><span class="status"></span></div>
+      </div>
+    </div>
+
+    <div class="sidebar-sessions">
+      <div class="session-group-label">今天</div>
+      <div class="session-card active">
+        <div class="session-icon c1">🔧</div>
+        <div class="session-text">
+          <h4>重构 API 路由设计</h4>
+          <p>帮我分析一下这个 API...</p>
+        </div>
+        <span class="session-time">刚刚</span>
+      </div>
+      <div class="session-card">
+        <div class="session-icon c2">📈</div>
+        <div class="session-text">
+          <h4>用户增长数据分析</h4>
+          <p>最近一个月的数据...</p>
+        </div>
+        <span class="session-time">2h</span>
+      </div>
+
+      <div class="session-group-label">昨天</div>
+      <div class="session-card">
+        <div class="session-icon c3">🎯</div>
+        <div class="session-text">
+          <h4>产品需求评审辅助</h4>
+          <p>这个需求的优先级...</p>
+        </div>
+        <span class="session-time">昨天</span>
+      </div>
+      <div class="session-card">
+        <div class="session-icon c4">💡</div>
+        <div class="session-text">
+          <h4>技术方案 Brainstorm</h4>
+          <p>关于分布式消息队列...</p>
+        </div>
+        <span class="session-time">昨天</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="chat-header">
+      <div class="chat-title">
+        <div class="chat-title-icon">🧠</div>
+        <div>
+          <h2>研发助手</h2>
+          <p>Claude 3.5 Sonnet · 在线 · 3 条消息</p>
+        </div>
+      </div>
+      <div class="chat-actions">
+        <button class="chat-action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4"/></svg>
+          配置
+        </button>
+        <button class="chat-action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          分享
+        </button>
+      </div>
+    </div>
+
+    <div class="messages">
+      <div class="msg assistant" style="animation-delay:.05s">
+        <div class="msg-ava">🧠</div>
+        <div class="msg-content">
+          <div class="msg-meta">研发助手 · 14:20</div>
+          <div class="msg-text">
+            你好！我是你的研发助手，擅长代码审查、架构设计和技术方案讨论。有什么可以帮到你的？
+          </div>
+        </div>
+      </div>
+
+      <div class="msg user" style="animation-delay:.1s">
+        <div class="msg-ava">Y</div>
+        <div class="msg-content">
+          <div class="msg-meta">你 · 14:21</div>
+          <div class="msg-text">
+            帮我分析一下 API 的路由设计。目前 <code>/api/v1/agents</code> 和 <code>/api/v1/chat/sessions</code> 这些路由感觉层级关系不太清晰。
+          </div>
+        </div>
+      </div>
+
+      <div class="msg assistant" style="animation-delay:.15s">
+        <div class="msg-ava">🧠</div>
+        <div class="msg-content">
+          <div class="msg-meta">研发助手 · 14:22</div>
+          <div class="tool-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            分析代码结构
+          </div>
+          <div class="msg-text">
+            分析了你的路由定义后，建议按以下方式重组：<br><br>
+            <strong>现有问题：</strong><br>
+            Session 放在 <code>/chat/sessions</code> 下打破了资源归属关系，应该是 agent 的子资源。<br><br>
+            <strong>推荐结构：</strong><br>
+            • <code>GET /api/v1/agents</code> — 列出所有 Agent<br>
+            • <code>POST /api/v1/agents/{id}/sessions</code> — 为指定 Agent 创建会话<br>
+            • <code>GET /api/v1/sessions/{sid}/messages</code> — 获取消息（拍平避免三层嵌套）<br><br>
+            这样资源层级更清晰，符合 RESTful 最佳实践。需要我帮你生成迁移代码吗？
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="input-box">
+        <textarea rows="1" placeholder="输入消息，开始对话..."></textarea>
+        <div class="input-tools">
+          <button class="input-tool-btn" title="上传文件">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+        </div>
+        <button class="send-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

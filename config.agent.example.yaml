@@ -1,0 +1,27 @@
+# Minimal config for abot-agent (CLI mode)
+# Copy to config.yaml and fill in your API key
+
+app_name: abot
+
+# Required: LLM provider
+providers:
+  - name: primary
+    api_base: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"  # Set via environment variable
+    model: "gpt-4o-mini"
+
+# Optional: Agent definition (auto-created if empty)
+agents:
+  - id: default-bot
+    name: assistant
+    description: "A helpful assistant"
+    model: "gpt-4o-mini"
+
+# Optional: Session storage
+session:
+  type: jsonl  # or "memory" for in-memory storage
+  dir: "~/.abot/sessions"
+
+# Optional: Context window
+context_window: 128000
+bus_buffer_size: 100

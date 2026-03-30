@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>abot · 方案C — 终端工业风</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0c0c0c;--surface:#141414;--surface2:#1c1c1c;--surface3:#242424;
+  --border:#333;--border-accent:#555;
+  --text:#d4d4d4;--text-dim:#888;--text-muted:#555;
+  --green:#00e676;--green-dim:#00c060;--green-dark:#004d25;
+  --red:#ff3d3d;--amber:#ffab00;--cyan:#00e5ff;
+  --font-mono:'Space Mono',monospace;
+  --font-body:'IBM Plex Sans','Noto Sans SC',-apple-system,sans-serif;
+}
+html,body{height:100%;font-family:var(--font-body);background:var(--bg);color:var(--text);font-size:13px;-webkit-font-smoothing:antialiased}
+::selection{background:var(--green);color:var(--bg)}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:0}
+
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* ─── Sidebar ─── */
+.sidebar{width:260px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:16px;border-bottom:1px solid var(--border)}
+.logo{font-family:var(--font-mono);font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--green)}
+.logo .blink{animation:blink-cursor 1s infinite}
+@keyframes blink-cursor{0%,50%{opacity:1}51%,100%{opacity:0}}
+.sys-info{margin-top:8px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);line-height:1.6}
+.sys-info span{color:var(--text-dim)}
+
+.sidebar-nav{padding:8px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 10px;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);cursor:pointer;transition:all .1s;border:1px solid transparent}
+.nav-item:hover{color:var(--text);background:var(--surface2);border-color:var(--border)}
+.nav-item.active{color:var(--green);border-color:var(--green-dark);background:rgba(0,230,118,.05)}
+.nav-item .key{display:inline-block;padding:1px 5px;background:var(--surface3);border:1px solid var(--border);border-radius:2px;font-size:10px;color:var(--text-muted);margin-left:auto;font-family:var(--font-mono)}
+
+.sidebar-section{flex:1;overflow-y:auto;padding:8px;border-top:1px solid var(--border)}
+.section-head{padding:6px 10px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:2px;display:flex;align-items:center;gap:6px}
+.section-head::before{content:'//';color:var(--green-dark)}
+.session-item{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;transition:all .1s;border-left:2px solid transparent;font-size:12.5px}
+.session-item:hover{background:var(--surface2);border-left-color:var(--text-muted)}
+.session-item.active{background:var(--surface2);border-left-color:var(--green)}
+.session-item .idx{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);width:20px;text-align:right}
+.session-item .name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-dim)}
+.session-item.active .name{color:var(--text)}
+.session-item .tag{font-family:var(--font-mono);font-size:9px;padding:1px 5px;border:1px solid var(--border);color:var(--text-muted);border-radius:2px}
+
+/* Agent status block */
+.agent-status{padding:12px;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:11px}
+.status-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0}
+.status-row .label{color:var(--text-muted)}
+.status-row .val{color:var(--text-dim)}
+.status-row .val.online{color:var(--green)}
+.status-row .val.warn{color:var(--amber)}
+
+/* ─── Main ─── */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top-bar{padding:10px 24px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-family:var(--font-mono)}
+.top-bar-left{display:flex;align-items:center;gap:16px}
+.breadcrumb{font-size:12px;color:var(--text-dim)}
+.breadcrumb .sep{color:var(--text-muted);margin:0 4px}
+.breadcrumb .current{color:var(--green)}
+.top-bar-right{display:flex;gap:8px}
+.top-btn{padding:5px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);font-family:var(--font-mono);font-size:11px;cursor:pointer;transition:all .1s}
+.top-btn:hover{border-color:var(--green-dark);color:var(--green)}
+
+/* Messages */
+.messages{flex:1;overflow-y:auto;padding:20px 24px;background:var(--bg);position:relative}
+.messages::before{content:'';position:absolute;top:0;left:32px;bottom:0;width:1px;background:var(--border);opacity:.4;pointer-events:none}
+
+.msg{display:flex;gap:16px;margin-bottom:20px;animation:termIn .3s ease both;position:relative}
+@keyframes termIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1}}
+.msg-marker{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0;position:relative;z-index:1;margin-left:29px}
+.msg.assistant .msg-marker{background:var(--green);box-shadow:0 0 8px rgba(0,230,118,.3)}
+.msg.user .msg-marker{background:var(--cyan);box-shadow:0 0 8px rgba(0,229,255,.3)}
+.msg.system .msg-marker{background:var(--amber);box-shadow:0 0 8px rgba(255,171,0,.3)}
+.msg-body{flex:1;min-width:0}
+.msg-head{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-family:var(--font-mono);font-size:11px}
+.msg.assistant .msg-head .who{color:var(--green)}
+.msg.user .msg-head .who{color:var(--cyan)}
+.msg.system .msg-head .who{color:var(--amber)}
+.msg-head .ts{color:var(--text-muted)}
+.msg-bubble{padding:12px 16px;border:1px solid var(--border);background:var(--surface);font-size:13px;line-height:1.7;border-radius:0}
+.msg.user .msg-bubble{background:var(--surface2);border-color:rgba(0,229,255,.15)}
+.msg.system .msg-bubble{background:transparent;border-style:dashed;border-color:rgba(255,171,0,.2);font-family:var(--font-mono);font-size:11.5px;color:var(--text-dim)}
+.msg-bubble code{font-family:var(--font-mono);font-size:12px;color:var(--green);background:rgba(0,230,118,.08);padding:1px 5px}
+.msg-bubble strong{color:var(--text);font-weight:600}
+
+.tool-block{margin:8px 0;padding:8px 12px;background:var(--bg);border-left:2px solid var(--amber);font-family:var(--font-mono);font-size:11px}
+.tool-block .header{color:var(--amber);font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.tool-block .output{color:var(--text-dim);white-space:pre-wrap;line-height:1.5}
+
+/* Input */
+.input-area{padding:12px 24px 20px;border-top:1px solid var(--border);background:var(--surface)}
+.input-prompt{font-family:var(--font-mono);font-size:11px;color:var(--green-dim);margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.input-prompt .path{color:var(--text-muted)}
+.input-row{display:flex;align-items:flex-end;gap:8px}
+.input-prefix{font-family:var(--font-mono);color:var(--green);font-size:14px;font-weight:700;padding-bottom:8px;flex-shrink:0}
+.input-field{flex:1;background:var(--surface2);border:1px solid var(--border);padding:10px 14px;color:var(--text);font-family:var(--font-body);font-size:14px;resize:none;outline:none;min-height:20px;max-height:120px;line-height:1.5;transition:border-color .15s}
+.input-field:focus{border-color:var(--green-dark)}
+.input-field::placeholder{color:var(--text-muted)}
+.send-btn{padding:10px 20px;background:var(--green-dark);border:1px solid var(--green-dim);color:var(--green);font-family:var(--font-mono);font-weight:700;font-size:12px;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:1px}
+.send-btn:hover{background:var(--green-dim);color:var(--bg)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">abot<span class="blink">_</span></div>
+      <div class="sys-info">
+        <span>version</span>  1.2.0<br>
+        <span>uptime</span>   3d 14h 22m<br>
+        <span>agents</span>   4 active
+      </div>
+    </div>
+
+    <div class="sidebar-nav">
+      <div class="nav-item active">
+        <span>▸ 对话</span>
+        <span class="key">⌘1</span>
+      </div>
+      <div class="nav-item">
+        <span>▸ Agents</span>
+        <span class="key">⌘2</span>
+      </div>
+      <div class="nav-item">
+        <span>▸ 工具</span>
+        <span class="key">⌘3</span>
+      </div>
+      <div class="nav-item">
+        <span>▸ 设置</span>
+        <span class="key">⌘4</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-head">Sessions</div>
+      <div class="session-item active">
+        <span class="idx">01</span>
+        <span class="name">API 路由重构方案</span>
+        <span class="tag">dev</span>
+      </div>
+      <div class="session-item">
+        <span class="idx">02</span>
+        <span class="name">Q1 增长数据分析</span>
+        <span class="tag">data</span>
+      </div>
+      <div class="session-item">
+        <span class="idx">03</span>
+        <span class="name">产品发布文案</span>
+        <span class="tag">copy</span>
+      </div>
+      <div class="session-item">
+        <span class="idx">04</span>
+        <span class="name">竞品技术栈调研</span>
+        <span class="tag">dev</span>
+      </div>
+      <div class="session-item">
+        <span class="idx">05</span>
+        <span class="name">服务端性能瓶颈</span>
+        <span class="tag">ops</span>
+      </div>
+    </div>
+
+    <div class="agent-status">
+      <div class="status-row"><span class="label">agent:</span><span class="val">研发助手</span></div>
+      <div class="status-row"><span class="label">model:</span><span class="val">claude-3.5-sonnet</span></div>
+      <div class="status-row"><span class="label">status:</span><span class="val online">● online</span></div>
+      <div class="status-row"><span class="label">tokens:</span><span class="val warn">12.4k / 200k</span></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <div class="breadcrumb">
+          abot<span class="sep">/</span>sessions<span class="sep">/</span><span class="current">01-api-routing</span>
+        </div>
+      </div>
+      <div class="top-bar-right">
+        <button class="top-btn">EXPORT</button>
+        <button class="top-btn">CLEAR</button>
+        <button class="top-btn">CONFIG</button>
+      </div>
+    </div>
+
+    <div class="messages">
+      <div class="msg system" style="animation-delay:.05s">
+        <div class="msg-marker"></div>
+        <div class="msg-body">
+          <div class="msg-head"><span class="who">SYSTEM</span><span class="ts">14:20:00</span></div>
+          <div class="msg-bubble">Session initialized. Agent: 研发助手 (claude-3.5-sonnet). Tools: [file_read, web_search, shell_exec, code_analysis]. Ready.</div>
+        </div>
+      </div>
+
+      <div class="msg assistant" style="animation-delay:.1s">
+        <div class="msg-marker"></div>
+        <div class="msg-body">
+          <div class="msg-head"><span class="who">AGENT:研发助手</span><span class="ts">14:20:01</span></div>
+          <div class="msg-bubble">
+            你好，我是研发助手。支持代码分析、架构设计、技术方案讨论。需要什么帮助？
+          </div>
+        </div>
+      </div>
+
+      <div class="msg user" style="animation-delay:.15s">
+        <div class="msg-marker"></div>
+        <div class="msg-body">
+          <div class="msg-head"><span class="who">USER</span><span class="ts">14:21:33</span></div>
+          <div class="msg-bubble">
+            分析一下 API 路由设计。当前 <code>/api/v1/agents</code> 和 <code>/api/v1/chat/sessions</code> 层级关系不太清晰，想重构。
+          </div>
+        </div>
+      </div>
+
+      <div class="msg assistant" style="animation-delay:.2s">
+        <div class="msg-marker"></div>
+        <div class="msg-body">
+          <div class="msg-head"><span class="who">AGENT:研发助手</span><span class="ts">14:22:05</span></div>
+          <div class="tool-block">
+            <div class="header">⚡ TOOL: code_analysis</div>
+            <div class="output">scanning: cmd/abot-server/api.go
+scanning: pkg/api/console/handler.go
+scanning: pkg/api/console/agents.go
+found: 23 route definitions, 4 resource groups</div>
+          </div>
+          <div class="msg-bubble">
+            分析完成。发现以下问题和优化建议：<br><br>
+            <strong>[ISSUE-1] 资源层级混乱</strong><br>
+            <code>sessions</code> 放在 <code>/chat/</code> 下，但本质上 session 归属于 agent。建议：<br>
+            <code>POST /api/v1/agents/{id}/sessions</code><br><br>
+            <strong>[ISSUE-2] 嵌套过深</strong><br>
+            <code>/agents/{id}/sessions/{sid}/messages</code> 超过 2 层。建议将 messages 拍平：<br>
+            <code>GET /api/v1/sessions/{sid}/messages</code><br><br>
+            <strong>[ISSUE-3] 命名不一致</strong><br>
+            部分路由用复数 <code>/agents</code>，部分用单数 <code>/workspace</code>。建议统一使用复数。<br><br>
+            需要我生成迁移代码和向后兼容的路由别名吗？
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="input-prompt"><span class="path">~/abot/session-01</span> $</div>
+      <div class="input-row">
+        <span class="input-prefix">❯</span>
+        <textarea class="input-field" rows="1" placeholder="输入指令..."></textarea>
+        <button class="send-btn">SEND</button>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

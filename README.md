@@ -45,21 +45,18 @@ Bot: Hello! How can I help you today?
 Best for teams and production use.
 
 ```bash
-# Using Docker Compose
-curl -O https://raw.githubusercontent.com/yourusername/abot/main/docker-compose.yml
+# 1. Start backend (port 3001)
+./abot console --config config.test.yaml
 
-# Configure environment
-cat > .env <<EOF
-OPENAI_API_KEY=sk-xxx
-JWT_SECRET=$(openssl rand -hex 32)
-MYSQL_ROOT_PASSWORD=secure-password
-EOF
+# 2. Start frontend (port 3000)
+cd web && npm run dev
 
-# Start services
-docker-compose up -d
-
-# Open browser
+# 3. Open browser
 open http://localhost:3000
+
+# 4. Login with test account
+# Email: test@example.com
+# Password: Test123456
 ```
 
 ### Option 3: API Server (For Integration)
@@ -153,11 +150,11 @@ abot uses a multi-binary architecture for clear separation of concerns:
 
 ## 📖 Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) - System design and component details
-- [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
-- [Migration Guide](docs/MIGRATION.md) - Upgrade from single-binary architecture
-- [API Reference](docs/API.md) - HTTP API documentation
-- [Configuration](docs/CONFIGURATION.md) - All configuration options
+- [docs/README.md](docs/README.md) — index
+- [Project architecture](docs/PROJECT_ARCHITECTURE.md) — layout, security, English summary, CLI tips
+- [Deployment & migration](docs/DEPLOYMENT.md) — compose, DB, scaling, v1→v2 notes
+- [Default tools / MCP / workspace](docs/DEFAULT_CONFIG.md) — summary; [SKILLS.md](SKILLS.md) — skill list
+- HTTP API: [cmd/abot-server/README.md](cmd/abot-server/README.md); examples: [config.example.yaml](config.example.yaml), [config.agent.example.yaml](config.agent.example.yaml)
 
 ## 🎯 Use Cases
 
@@ -232,18 +229,16 @@ See [example configs](config/) for more options.
 ### Backend Development
 
 ```bash
-# Install dependencies
 go mod download
-
-# Build all binaries
-make all
-
-# Run tests
+make all                    # abot-agent, abot-server, abot-web
 go test ./...
-
-# Run with hot reload
-air
+make test-coverage          # optional HTML coverage
+make lint                   # requires golangci-lint
+docker compose -f docker-compose.dev.yml up   # optional full stack
+air                         # hot reload (.air.toml)
 ```
+
+Cross-compile: `GOOS=linux GOARCH=amd64 make all`. Docker images: `make docker-build` (Dockerfiles under `cmd/*/Dockerfile`).
 
 ### Frontend Development
 
@@ -305,15 +300,7 @@ docker-compose logs -f abot-web
 
 ### Kubernetes
 
-```bash
-# Using Helm
-helm repo add abot https://charts.abot.run
-helm install abot abot/abot \
-  --set openai.apiKey=sk-xxx \
-  --set mysql.enabled=true \
-  --set ingress.enabled=true \
-  --set ingress.host=abot.example.com
-```
+This repository does not ship a Helm chart. Deploy with your own manifests (Deployment + Service + Ingress), MySQL, and secrets; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for constraints.
 
 ### Systemd Service
 
@@ -354,7 +341,7 @@ We welcome contributions! Here's how you can help:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and development process.
+Contributions are welcome via pull request; align with existing code style and add tests where practical.
 
 ## 📄 License
 

@@ -22,6 +22,7 @@ bus_buffer_size: 100
 console:
   addr: ":3000"
   jwt_secret: "change-me-to-a-random-secret"
+  encryption_secret: "change-me-to-a-different-random-secret-at-least-32-chars"
   static_dir: "web/out"
   allowed_origins:
     - "http://localhost:3000"
@@ -29,10 +30,27 @@ console:
     # - "*"  # Allow all origins (not recommended for production)
 
 # sandbox:
-#   level: "standard"           # none / standard / strict (Landlock sandbox level, Linux only)
-#   sandbox_binary: ""          # path to abot-sandbox (auto-detected if empty)
+#   # --- Landlock (application-layer, Linux only) ---
+#   # level: "standard"           # none / standard / strict
+#   # sandbox_binary: ""          # path to abot-sandbox (auto-detected if empty)
+#
+#   # --- gVisor standalone (lightweight, no Docker, recommended) ---
+#   level: "gvisor"               # uses "runsc do" directly
+#   # gvisor_binary: ""           # path to runsc (auto-detected if empty)
+#   # gvisor_network: false       # true = allow host network (for npm install)
+#
+#   # --- Docker + gVisor (full container isolation, heaviest) ---
+#   # level: "container"
+#   # container_runtime: "runsc"    # gVisor runtime (empty = Docker default runc)
+#   # container_image: "abot/sandbox:latest"
+#   # container_mem_mb: 512
+#   # container_cpus: "0.5"
+#   # container_network: "none"
+#   # container_workspace_root: ""  # DooD mode: host-side workspace path
+#
+#   # Shared options (both modes):
 #   restrict_to_workspace: true
-#   exec_memory_mb: 512
+#   exec_memory_mb: 512           # ulimit (Landlock mode only)
 #   exec_cpu_seconds: 30
 #   exec_filesize_mb: 50
 #   exec_nproc: 64
