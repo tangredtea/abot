@@ -21,7 +21,7 @@ Perfect for personal use and quick testing.
 
 ```bash
 # Download binary
-wget https://github.com/yourusername/abot/releases/latest/download/abot-agent-linux-amd64.tar.gz
+wget https://github.com/tangredtea/abot/releases/latest/download/abot-agent-linux-amd64.tar.gz
 tar -xzf abot-agent-linux-amd64.tar.gz
 sudo mv abot-agent /usr/local/bin/
 
@@ -45,18 +45,14 @@ Bot: Hello! How can I help you today?
 Best for teams and production use.
 
 ```bash
-# 1. Start backend (port 3001)
-./abot console --config config.test.yaml
+# 1. Start web server (port 3000)
+./abot-web -config config.yaml
 
-# 2. Start frontend (port 3000)
-cd web && npm run dev
+# 2. Or use Docker Compose
+docker compose up -d
 
 # 3. Open browser
 open http://localhost:3000
-
-# 4. Login with test account
-# Email: test@example.com
-# Password: Test123456
 ```
 
 ### Option 3: API Server (For Integration)
@@ -82,16 +78,15 @@ curl http://localhost:8080/api/v1/agents
 
 **macOS:**
 ```bash
-brew tap yourusername/abot
-brew install abot-agent
-brew install abot-server
-brew install abot-web
+# Build from source
+git clone https://github.com/tangredtea/abot.git
+cd abot && make all
 ```
 
 **Linux:**
 ```bash
 # Download from releases
-wget https://github.com/yourusername/abot/releases/latest/download/abot-agent-linux-amd64.tar.gz
+wget https://github.com/tangredtea/abot/releases/latest/download/abot-agent-linux-amd64.tar.gz
 tar -xzf abot-agent-linux-amd64.tar.gz
 sudo mv abot-agent /usr/local/bin/
 ```
@@ -107,7 +102,7 @@ docker pull abot/web:latest
 ### Build from Source
 
 ```bash
-git clone https://github.com/yourusername/abot.git
+git clone https://github.com/tangredtea/abot.git
 cd abot
 make all
 
@@ -282,7 +277,7 @@ abot/
 
 ```bash
 # Download docker-compose.yml
-curl -O https://raw.githubusercontent.com/yourusername/abot/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/tangredtea/abot/main/docker-compose.yml
 
 # Configure .env
 cat > .env <<EOF
@@ -355,10 +350,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## 📞 Support
 
-- 📧 Email: support@abot.run
-- 💬 Discord: https://discord.gg/abot
-- 🐛 Issues: https://github.com/yourusername/abot/issues
-- 📖 Documentation: https://docs.abot.run
+- 🐛 Issues: https://github.com/tangredtea/abot/issues
 
 ## 🗺️ Roadmap
 

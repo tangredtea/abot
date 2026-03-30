@@ -8,9 +8,7 @@ package search
 
 import (
 	"context"
-	"math"
 	"sort"
-	"strings"
 )
 
 // HybridSearcher combines keyword and vector search.
