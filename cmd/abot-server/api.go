@@ -21,15 +21,22 @@ import (
 )
 
 func runAPIServer(ctx context.Context, cancel context.CancelFunc, cfg *agent.Config, app *agent.App, deps *agent.BootstrapDeps, db *gorm.DB, stores *bootstrap.StoreBundle) error {
-	// JWT config
+	// JWT config — never fall back to a default secret
 	jwtSecret := cfg.Console.JWTSecret
 	if jwtSecret == "" {
-		jwtSecret = "abot-default-secret-change-me"
-		slog.Warn("api-server: using default JWT secret, set console.jwt_secret in config for production")
+		return fmt.Errorf("console.jwt_secret is required; refusing to start with an empty secret")
 	}
 	jwtCfg := auth.JWTConfig{
 		Secret: jwtSecret,
 		Expiry: 24 * time.Hour,
+	}
+
+	// Use a dedicated encryption key for API-key-at-rest encryption.
+	// Falls back to jwt_secret only if encryption_secret is not configured.
+	encryptionSecret := cfg.Console.EncryptionSecret
+	if encryptionSecret == "" {
+		encryptionSecret = jwtSecret
+		slog.Warn("api-server: console.encryption_secret not set, falling back to jwt_secret (set a separate key for production)")
 	}
 
 	// Initialize AgentManager
@@ -64,7 +71,7 @@ func runAPIServer(ctx context.Context, cancel context.CancelFunc, cfg *agent.Con
 		JWTConfig:          jwtCfg,
 		AppName:            cfg.AppName,
 		DB:                 db,
-		EncryptionSecret:   jwtSecret,
+		EncryptionSecret:   encryptionSecret,
 		AllowedOrigins:     cfg.Console.AllowedOrigins,
 		AgentManager:       agentManager,
 	}

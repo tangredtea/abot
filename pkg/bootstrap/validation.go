@@ -17,7 +17,7 @@ func ValidateForAgent(cfg *agent.Config) error {
 }
 
 // ValidateForServer validates config for server mode.
-// Server mode requires providers, mysql_dsn, and optional console settings.
+// Server mode requires providers, mysql_dsn, and jwt_secret.
 func ValidateForServer(cfg *agent.Config) error {
 	if len(cfg.Providers) == 0 {
 		return fmt.Errorf("at least one provider is required for server mode")
@@ -25,13 +25,14 @@ func ValidateForServer(cfg *agent.Config) error {
 	if cfg.MySQLDSN == "" {
 		return fmt.Errorf("mysql_dsn is required for server mode")
 	}
-	// console.addr, console.jwt_secret are optional
-	// console.static_dir is not required for server mode
+	if cfg.Console.JWTSecret == "" {
+		return fmt.Errorf("console.jwt_secret is required for server mode (do not use default secrets in production)")
+	}
 	return nil
 }
 
 // ValidateForWeb validates config for web mode.
-// Web mode requires providers, mysql_dsn, and console.static_dir.
+// Web mode requires providers, mysql_dsn, and jwt_secret.
 func ValidateForWeb(cfg *agent.Config) error {
 	if len(cfg.Providers) == 0 {
 		return fmt.Errorf("at least one provider is required for web mode")
@@ -39,9 +40,8 @@ func ValidateForWeb(cfg *agent.Config) error {
 	if cfg.MySQLDSN == "" {
 		return fmt.Errorf("mysql_dsn is required for web mode")
 	}
-	if cfg.Console.StaticDir == "" {
-		return fmt.Errorf("console.static_dir is required for web mode")
+	if cfg.Console.JWTSecret == "" {
+		return fmt.Errorf("console.jwt_secret is required for web mode (do not use default secrets in production)")
 	}
-	// console.addr, console.jwt_secret are optional
 	return nil
 }

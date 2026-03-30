@@ -28,7 +28,7 @@ RUN npm run build
 # Runtime stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates docker-cli
 
 WORKDIR /app
 

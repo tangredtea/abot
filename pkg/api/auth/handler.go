@@ -19,12 +19,12 @@ import (
 
 // Deps holds dependencies for auth handlers.
 type Deps struct {
-	AccountStore    types.AccountStore
-	AccTenantStore  types.AccountTenantStore
-	TenantStore     types.TenantStore
-	WorkspaceStore  types.WorkspaceStore
-	JWTConfig       JWTConfig
-	DB              *gorm.DB
+	AccountStore   types.AccountStore
+	AccTenantStore types.AccountTenantStore
+	TenantStore    types.TenantStore
+	WorkspaceStore types.WorkspaceStore
+	JWTConfig      JWTConfig
+	DB             *gorm.DB
 }
 
 // Handler returns an http.Handler for auth endpoints.
@@ -79,6 +79,7 @@ type meResponse struct {
 }
 
 func (h *authHandler) register(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var req registerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		apierrors.HandleError(w, apierrors.BadRequest("invalid request body"))
@@ -97,14 +98,9 @@ func (h *authHandler) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if email already exists.
+	// Check if email already exists — return a generic error to prevent email enumeration.
 	if _, err := h.deps.AccountStore.GetByEmail(r.Context(), req.Email); err == nil {
-		apierrors.HandleError(w, apierrors.New(
-			apierrors.CodeEmailAlreadyExists,
-			"email already registered",
-			http.StatusConflict,
-			nil,
-		))
+		apierrors.HandleError(w, apierrors.BadRequest("registration failed, please try again or use a different email"))
 		return
 	}
 
@@ -195,6 +191,7 @@ func (h *authHandler) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeAuthError(w, http.StatusBadRequest, "invalid request body")

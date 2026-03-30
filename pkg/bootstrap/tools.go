@@ -41,12 +41,9 @@ func BuildLightweightTools(cfg *agent.Config) ([]any, error) {
 		}
 	}
 
-	// Wire SandboxOpts for Landlock kernel-level filesystem sandbox
+	// Wire sandbox options.
 	if cfg.Sandbox.Level != "" && cfg.Sandbox.Level != "none" {
-		toolsDeps.SandboxOpts = &tools.SandboxOpts{
-			Level:        tools.SandboxLevel(cfg.Sandbox.Level),
-			HelperBinary: cfg.Sandbox.SandboxBinary,
-		}
+		toolsDeps.SandboxOpts = buildSandboxOpts(cfg)
 	}
 
 	// Wire per-tenant rate limiter
@@ -74,7 +71,7 @@ func BuildLightweightTools(cfg *agent.Config) ([]any, error) {
 
 // BuildFullTools builds all tools including database-dependent ones.
 // Used by abot-server and abot-web.
-func BuildFullTools(cfg *agent.Config, stores *StoreBundle, msgBus types.MessageBus) ([]any, error) {
+func BuildFullTools(cfg *agent.Config, stores *StoreBundle, msgBus types.MessageBus) ([]any, *tools.Deps, error) {
 	// Object store
 	objStoreDir := cfg.ObjectStore.Dir
 	if objStoreDir == "" {
@@ -109,12 +106,9 @@ func BuildFullTools(cfg *agent.Config, stores *StoreBundle, msgBus types.Message
 		}
 	}
 
-	// Wire SandboxOpts for Landlock kernel-level filesystem sandbox
+	// Wire sandbox options.
 	if cfg.Sandbox.Level != "" && cfg.Sandbox.Level != "none" {
-		toolsDeps.SandboxOpts = &tools.SandboxOpts{
-			Level:        tools.SandboxLevel(cfg.Sandbox.Level),
-			HelperBinary: cfg.Sandbox.SandboxBinary,
-		}
+		toolsDeps.SandboxOpts = buildSandboxOpts(cfg)
 	}
 
 	// Wire per-tenant rate limiter
@@ -132,7 +126,7 @@ func BuildFullTools(cfg *agent.Config, stores *StoreBundle, msgBus types.Message
 	// Build all tools
 	builtTools, err := tools.BuildAllTools(toolsDeps)
 	if err != nil {
-		return nil, fmt.Errorf("build tools: %w", err)
+		return nil, nil, fmt.Errorf("build tools: %w", err)
 	}
 
 	toolsAsAny := make([]any, len(builtTools))
@@ -140,5 +134,31 @@ func BuildFullTools(cfg *agent.Config, stores *StoreBundle, msgBus types.Message
 		toolsAsAny[i] = t
 	}
 
-	return toolsAsAny, nil
+	return toolsAsAny, toolsDeps, nil
+}
+
+// buildSandboxOpts creates SandboxOpts from the config, supporting both
+// Landlock (standard/strict) and container (Docker/gVisor) modes.
+func buildSandboxOpts(cfg *agent.Config) *tools.SandboxOpts {
+	opts := &tools.SandboxOpts{
+		Level:        tools.SandboxLevel(cfg.Sandbox.Level),
+		HelperBinary: cfg.Sandbox.SandboxBinary,
+	}
+	switch opts.Level {
+	case tools.SandboxContainer:
+		opts.ContainerImage = cfg.Sandbox.ContainerImage
+		opts.ContainerRuntime = cfg.Sandbox.ContainerRuntime
+		opts.ContainerBinary = cfg.Sandbox.ContainerBinary
+		opts.ContainerMemMB = cfg.Sandbox.ContainerMemMB
+		opts.ContainerCPUs = cfg.Sandbox.ContainerCPUs
+		opts.ContainerPids = cfg.Sandbox.ContainerPids
+		opts.ContainerNetwork = cfg.Sandbox.ContainerNetwork
+		opts.ContainerTmpMB = cfg.Sandbox.ContainerTmpMB
+		opts.ContainerDiskMB = cfg.Sandbox.ContainerDiskMB
+		opts.ContainerWorkspaceRoot = cfg.Sandbox.ContainerWorkspaceRoot
+	case tools.SandboxGVisor:
+		opts.GVisorBinary = cfg.Sandbox.GVisorBinary
+		opts.GVisorNetwork = cfg.Sandbox.GVisorNetwork
+	}
+	return opts
 }

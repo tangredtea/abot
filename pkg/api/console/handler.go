@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 
 	"abot/pkg/agent"
@@ -46,7 +47,7 @@ func Handler(deps Deps) http.Handler {
 		AllowedOrigins: deps.AllowedOrigins,
 	})
 	securityMiddleware := middleware.SecurityHeaders(middleware.DefaultSecurityConfig())
-	
+
 	// Create logger
 	logger := slog.Default()
 
@@ -60,9 +61,9 @@ func Handler(deps Deps) http.Handler {
 		DB:             deps.DB,
 	}
 	authHandler := auth.Handler(authDeps)
-	
+
 	// Apply middleware: Recovery → RequestID → Logger → Security → CORS → Handler
-	mux.Handle("/api/v1/auth/", 
+	mux.Handle("/api/v1/auth/",
 		middleware.Recovery(
 			middleware.RequestID(
 				middleware.Logger(logger)(
@@ -108,7 +109,7 @@ func Handler(deps Deps) http.Handler {
 	protected.HandleFunc("GET /api/v1/settings/providers", provH.get)
 	protected.HandleFunc("PUT /api/v1/settings/providers", provH.update)
 
-	mux.Handle("/api/v1/", 
+	mux.Handle("/api/v1/",
 		middleware.Recovery(
 			middleware.RequestID(
 				middleware.Logger(logger)(
@@ -121,9 +122,9 @@ func Handler(deps Deps) http.Handler {
 			),
 		),
 	)
-	
+
 	// /me endpoint (authenticated)
-	mux.Handle("/api/v1/auth/me", 
+	mux.Handle("/api/v1/auth/me",
 		middleware.Recovery(
 			middleware.RequestID(
 				middleware.Logger(logger)(
@@ -138,7 +139,12 @@ func Handler(deps Deps) http.Handler {
 	)
 
 	// WebSocket chat — auth via query param.
-	wsH := &wsHandler{deps: deps}
+	wsH := &wsHandler{
+		deps: deps,
+		upgrader: websocket.Upgrader{
+			CheckOrigin: makeOriginChecker(deps.AllowedOrigins),
+		},
+	}
 	mux.HandleFunc("/api/v1/chat/ws", wsH.handle)
 
 	return mux

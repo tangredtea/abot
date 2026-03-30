@@ -32,33 +32,26 @@ func run(configPath string) error {
 		return fmt.Errorf("validate config: %w", err)
 	}
 
-	// 3. Initialize database and stores
-	db, err := bootstrap.NewDatabase(cfg)
-	if err != nil {
-		return fmt.Errorf("database: %w", err)
-	}
-	stores := bootstrap.NewStores(db)
-
-	// 4. Build full dependencies (with MySQL)
-	deps, err := bootstrap.BuildFullDeps(cfg)
+	// 3. Build full dependencies (with MySQL)
+	result, err := bootstrap.BuildFullDeps(cfg)
 	if err != nil {
 		return fmt.Errorf("build deps: %w", err)
 	}
 
-	// 5. Start core engine
+	// 4. Start core engine
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	app, err := agent.Bootstrap(ctx, *cfg, *deps)
+	app, err := agent.Bootstrap(ctx, *cfg, *result.Deps)
 	if err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
 
-	// 6. Start background services (cron, heartbeat)
+	// 5. Start background services (cron, heartbeat)
 	if err := app.RunServices(ctx); err != nil {
 		return fmt.Errorf("run services: %w", err)
 	}
 
-	// 7. Start API server
-	return runAPIServer(ctx, cancel, cfg, app, deps, db, stores)
+	// 6. Start API server
+	return runAPIServer(ctx, cancel, cfg, app, result.Deps, result.DB, result.Stores)
 }

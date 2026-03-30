@@ -33,7 +33,7 @@ func run(configPath string) error {
 	}
 
 	// 3. Build full dependencies (includes MySQL)
-	deps, err := bootstrap.BuildFullDeps(cfg)
+	result, err := bootstrap.BuildFullDeps(cfg)
 	if err != nil {
 		return fmt.Errorf("build deps: %w", err)
 	}
@@ -42,7 +42,7 @@ func run(configPath string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	app, err := agent.Bootstrap(ctx, *cfg, *deps)
+	app, err := agent.Bootstrap(ctx, *cfg, *result.Deps)
 	if err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
@@ -53,5 +53,5 @@ func run(configPath string) error {
 	}
 
 	// 6. Start Web Console
-	return runWebConsole(ctx, cancel, cfg, app, deps)
+	return runWebConsole(ctx, cancel, cfg, app, result)
 }

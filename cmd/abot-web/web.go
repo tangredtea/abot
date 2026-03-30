@@ -19,39 +19,31 @@ import (
 	"google.golang.org/adk/tool"
 )
 
-func runWebConsole(ctx context.Context, cancel context.CancelFunc, cfg *agent.Config, app *agent.App, deps *agent.BootstrapDeps) error {
-	// 1. Get database connection
-	db, err := bootstrap.NewDatabase(cfg)
-	if err != nil {
-		return fmt.Errorf("database: %w", err)
-	}
+func runWebConsole(ctx context.Context, cancel context.CancelFunc, cfg *agent.Config, app *agent.App, result *bootstrap.FullDepsResult) error {
+	db := result.DB
+	stores := result.Stores
+	deps := result.Deps
 
-	// 2. Create stores
-	stores := bootstrap.NewStores(db)
-
-	// 3. Session service
-	sessionSvc, err := bootstrap.NewSessionService(cfg)
-	if err != nil {
-		return fmt.Errorf("session service: %w", err)
-	}
-
-	// 4. JWT configuration
 	jwtSecret := cfg.Console.JWTSecret
 	if jwtSecret == "" {
-		jwtSecret = "abot-default-secret-change-me"
-		slog.Warn("using default JWT secret, set console.jwt_secret in config for production")
+		return fmt.Errorf("console.jwt_secret is required; refusing to start with an empty secret")
 	}
 	jwtCfg := auth.JWTConfig{
 		Secret: jwtSecret,
 		Expiry: 24 * time.Hour,
 	}
 
-	// 5. Initialize AgentManager
+	encryptionSecret := cfg.Console.EncryptionSecret
+	if encryptionSecret == "" {
+		encryptionSecret = jwtSecret
+		slog.Warn("web-console: console.encryption_secret not set, falling back to jwt_secret (set a separate key for production)")
+	}
+
 	agentDefStore := mysqlstore.NewAgentDefinitionStore(db)
 	agentManager := console.NewAgentManager(
 		app.ExportRegistry(),
 		agentDefStore,
-		sessionSvc,
+		deps.SessionService,
 		deps.LLM,
 		convertTools(deps.Tools),
 		deps.Toolsets,
@@ -59,16 +51,14 @@ func runWebConsole(ctx context.Context, cancel context.CancelFunc, cfg *agent.Co
 		deps.InstructionProvider,
 	)
 
-	// 6. Load agents from database
 	if err := agentManager.LoadAllAgents(ctx, ""); err != nil {
 		slog.Warn("failed to load agents from database", "err", err)
 	}
 
-	// 7. Build Console dependencies
 	consoleDeps := console.Deps{
 		AgentLoop:          app.ExportLoop(),
 		Registry:           app.ExportRegistry(),
-		SessionService:     sessionSvc,
+		SessionService:     deps.SessionService,
 		AccountStore:       stores.Account,
 		AccTenantStore:     stores.AccountTenant,
 		ChatSessionStore:   stores.ChatSession,
@@ -78,7 +68,7 @@ func runWebConsole(ctx context.Context, cancel context.CancelFunc, cfg *agent.Co
 		JWTConfig:          jwtCfg,
 		AppName:            cfg.AppName,
 		DB:                 db,
-		EncryptionSecret:   jwtSecret,
+		EncryptionSecret:   encryptionSecret,
 		AllowedOrigins:     cfg.Console.AllowedOrigins,
 		AgentManager:       agentManager,
 	}

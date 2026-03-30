@@ -13,7 +13,7 @@
 // Validation:
 //   - ValidateForAgent: Validate config for agent mode (minimal requirements)
 //   - ValidateForServer: Validate config for server mode (requires MySQL)
-//   - ValidateForWeb: Validate config for web mode (requires MySQL + static dir)
+//   - ValidateForWeb: Validate config for web mode (requires MySQL + jwt_secret)
 //
 // Dependency Construction:
 //   - BuildCoreDeps: Build minimal dependencies without MySQL (for agent mode)
@@ -58,17 +58,17 @@
 //	if err := bootstrap.ValidateForServer(cfg); err != nil {
 //	    log.Fatal(err)
 //	}
-//	deps, err := bootstrap.BuildFullDeps(cfg)
+//	result, err := bootstrap.BuildFullDeps(cfg)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//	app, err := agent.Bootstrap(ctx, *cfg, *deps)
+//	app, err := agent.Bootstrap(ctx, *cfg, *result.Deps)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
 //	app.Run(ctx)
 //
-// Web mode (full dependencies with MySQL and static files):
+// Web mode (full dependencies with MySQL and web console):
 //
 //	cfg, err := bootstrap.LoadConfig("config.yaml")
 //	if err != nil {
@@ -77,11 +77,11 @@
 //	if err := bootstrap.ValidateForWeb(cfg); err != nil {
 //	    log.Fatal(err)
 //	}
-//	deps, err := bootstrap.BuildFullDeps(cfg)
+//	result, err := bootstrap.BuildFullDeps(cfg)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//	app, err := agent.Bootstrap(ctx, *cfg, *deps)
+//	app, err := agent.Bootstrap(ctx, *cfg, *result.Deps)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}

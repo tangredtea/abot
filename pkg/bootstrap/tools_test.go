@@ -107,13 +107,16 @@ func TestBuildFullTools(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tools, err := BuildFullTools(tt.cfg, stores, msgBus)
+			tools, toolsDeps, err := BuildFullTools(tt.cfg, stores, msgBus)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("BuildFullTools() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !tt.wantErr && tools == nil {
 				t.Error("BuildFullTools() returned nil tools")
+			}
+			if !tt.wantErr && toolsDeps == nil {
+				t.Error("BuildFullTools() returned nil toolsDeps")
 			}
 		})
 	}

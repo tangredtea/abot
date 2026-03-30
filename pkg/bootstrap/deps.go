@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"abot/pkg/agent"
+	"abot/pkg/api/auth"
 	"abot/pkg/api/marketplace"
 	"abot/pkg/bus"
 	"abot/pkg/mcp"
@@ -28,7 +29,8 @@ import (
 // BuildCoreDeps builds minimal dependencies (no MySQL).
 // Used by abot-agent.
 func BuildCoreDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// Session service
 	sessionSvc, err := NewSessionService(cfg)
@@ -101,10 +103,19 @@ func BuildCoreDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
 	return deps, nil
 }
 
+// FullDepsResult holds the complete bootstrap output so callers can access
+// the database handle and stores without opening a second connection.
+type FullDepsResult struct {
+	Deps   *agent.BootstrapDeps
+	DB     *gorm.DB
+	Stores *StoreBundle
+}
+
 // BuildFullDeps builds complete dependencies (with MySQL).
 // Used by abot-server and abot-web.
-func BuildFullDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
-	ctx := context.Background()
+func BuildFullDeps(cfg *agent.Config) (*FullDepsResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// Database
 	db, err := NewDatabase(cfg)
@@ -133,7 +144,7 @@ func BuildFullDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
 	msgBus := bus.New(bufSize)
 
 	// Full tools
-	toolsAsAny, err := BuildFullTools(cfg, stores, msgBus)
+	toolsAsAny, toolsDeps, err := BuildFullTools(cfg, stores, msgBus)
 	if err != nil {
 		return nil, err
 	}
@@ -169,15 +180,9 @@ func BuildFullDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
 	if cacheDir == "" {
 		cacheDir = "data/skill-cache"
 	}
-	objStoreDir := cfg.ObjectStore.Dir
-	if objStoreDir == "" {
-		objStoreDir = "data/objects"
-	}
-	// Note: objStore is already created in BuildFullTools, but we need it here too
-	// This is a minor duplication but keeps the function self-contained
 	skillsLoader := skills.NewSkillsLoader(
 		stores.SkillRegistry, stores.TenantSkill, stores.Tenant,
-		nil, // objStore will be set by BuildFullTools
+		toolsDeps.ObjectStore,
 		cacheDir,
 	)
 	builtinFS := os.DirFS("skills")
@@ -266,6 +271,13 @@ func BuildFullDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
 	cronSvc := scheduler.New(stores.Scheduler, msgBus, slog.Default())
 	slog.Info("cron scheduler created")
 
+	// Inject late-bound deps into tools so they can use vector/memory/skills/cron
+	toolsDeps.VectorStore = vectorStore
+	toolsDeps.Embedder = embedder
+	toolsDeps.MemoryEventStore = stores.MemoryEvent
+	toolsDeps.SkillsLoader = skillsLoader
+	toolsDeps.CronScheduler = cronSvc
+
 	// Heartbeat (optional)
 	var heartbeatSvc *scheduler.HeartbeatService
 	if cfg.Scheduler.HeartbeatInterval != "" {
@@ -298,12 +310,17 @@ func BuildFullDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
 		mcpClosers = append(mcpClosers, c)
 	}
 
-	// Marketplace API handler
-	marketplaceHandler := marketplace.Handler(marketplace.Deps{
-		Skills:    stores.SkillRegistry,
-		Tenants:   stores.TenantSkill,
-		Proposals: stores.Proposal,
-	})
+	// Marketplace API handler — auth is handled inside marketplace.Handler
+	jwtCfg := auth.JWTConfig{
+		Secret: cfg.Console.JWTSecret,
+		Expiry: 24 * time.Hour,
+	}
+	apiHandler := marketplace.Handler(marketplace.Deps{
+		Skills:         stores.SkillRegistry,
+		Tenants:        stores.TenantSkill,
+		Proposals:      stores.Proposal,
+		AccTenantStore: stores.AccountTenant,
+	}, jwtCfg)
 
 	deps := &agent.BootstrapDeps{
 		Bus:                 msgBus,
@@ -316,11 +333,11 @@ func BuildFullDeps(cfg *agent.Config) (*agent.BootstrapDeps, error) {
 		CronService:         cronSvc,
 		HeartbeatSvc:        heartbeatSvc,
 		MCPClients:          mcpClosers,
-		APIHandler:          marketplaceHandler,
+		APIHandler:          apiHandler,
 	}
 	if summaryLLM != nil {
 		deps.SummaryLLM = summaryLLM
 	}
 
-	return deps, nil
+	return &FullDepsResult{Deps: deps, DB: db, Stores: stores}, nil
 }

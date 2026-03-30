@@ -12,6 +12,8 @@ import (
 	"abot/pkg/types"
 )
 
+const sessionMaxBodySize = 1 << 20 // 1 MB
+
 type sessionsHandler struct {
 	deps Deps
 }
@@ -96,6 +98,7 @@ func (h *sessionsHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, sessionMaxBodySize)
 	var req createSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -152,14 +155,9 @@ func (h *sessionsHandler) get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	cs, err := h.deps.ChatSessionStore.Get(r.Context(), id)
+	cs, err := h.deps.ChatSessionStore.GetByAccountID(r.Context(), id, claims.AccountID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "session not found")
-		return
-	}
-
-	if cs.AccountID != claims.AccountID {
-		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -171,11 +169,8 @@ func (h *sessionsHandler) get(w http.ResponseWriter, r *http.Request) {
 		SessionID: cs.SessionKey,
 	})
 	if err == nil && sessResp != nil && sessResp.Session != nil {
-		// Get events iterator and convert to slice
 		eventsIter := sessResp.Session.Events()
 		if eventsIter != nil {
-			// Try to get all events - ADK v0.5.0 may have different API
-			// For now, skip this until we can test with actual ADK
 			_ = eventsIter
 		}
 	}
@@ -198,17 +193,13 @@ func (h *sessionsHandler) update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	cs, err := h.deps.ChatSessionStore.Get(r.Context(), id)
+	cs, err := h.deps.ChatSessionStore.GetByAccountID(r.Context(), id, claims.AccountID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
 	}
 
-	if cs.AccountID != claims.AccountID {
-		writeError(w, http.StatusForbidden, "access denied")
-		return
-	}
-
+	r.Body = http.MaxBytesReader(w, r.Body, sessionMaxBodySize)
 	var req updateSessionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -243,16 +234,12 @@ func (h *sessionsHandler) delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	cs, err := h.deps.ChatSessionStore.Get(r.Context(), id)
+	cs, err := h.deps.ChatSessionStore.GetByAccountID(r.Context(), id, claims.AccountID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
 	}
-
-	if cs.AccountID != claims.AccountID {
-		writeError(w, http.StatusForbidden, "access denied")
-		return
-	}
+	_ = cs
 
 	if err := h.deps.ChatSessionStore.Delete(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete session")

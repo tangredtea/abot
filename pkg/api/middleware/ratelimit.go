@@ -28,7 +28,7 @@ func newTokenBucket(rate, burst int) *tokenBucket {
 	if burst == 0 {
 		capacity = float64(rate)
 	}
-	
+
 	return &tokenBucket{
 		tokens:     capacity,
 		capacity:   capacity,
@@ -44,7 +44,7 @@ func (tb *tokenBucket) allow() bool {
 
 	now := time.Now()
 	elapsed := now.Sub(tb.lastRefill).Seconds()
-	
+
 	// Refill tokens based on elapsed time
 	tb.tokens += elapsed * tb.refillRate
 	if tb.tokens > tb.capacity {
@@ -57,7 +57,7 @@ func (tb *tokenBucket) allow() bool {
 		tb.tokens -= 1.0
 		return true
 	}
-	
+
 	return false
 }
 
@@ -67,6 +67,7 @@ type rateLimiter struct {
 	rate    int
 	burst   int
 	mu      sync.RWMutex
+	stop    chan struct{}
 }
 
 // newRateLimiter creates a new rate limiter.
@@ -75,18 +76,29 @@ func newRateLimiter(rate, burst int) *rateLimiter {
 		buckets: make(map[string]*tokenBucket),
 		rate:    rate,
 		burst:   burst,
+		stop:    make(chan struct{}),
 	}
 
 	// Cleanup old buckets every minute
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			rl.cleanup()
+		for {
+			select {
+			case <-rl.stop:
+				return
+			case <-ticker.C:
+				rl.cleanup()
+			}
 		}
 	}()
 
 	return rl
+}
+
+// Close stops the cleanup goroutine.
+func (rl *rateLimiter) Close() {
+	close(rl.stop)
 }
 
 // allow checks if a request for the given key is allowed.
@@ -119,7 +131,7 @@ func (rl *rateLimiter) cleanup() {
 		bucket.mu.Lock()
 		inactive := now.Sub(bucket.lastRefill) > 5*time.Minute
 		bucket.mu.Unlock()
-		
+
 		if inactive {
 			delete(rl.buckets, key)
 		}
@@ -152,12 +164,12 @@ func getClientIP(r *http.Request) string {
 		ips := strings.Split(xff, ",")
 		return strings.TrimSpace(ips[0])
 	}
-	
+
 	// Check X-Real-IP header
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return xri
 	}
-	
+
 	// Fall back to RemoteAddr
 	return r.RemoteAddr
 }

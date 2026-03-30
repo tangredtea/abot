@@ -63,6 +63,7 @@ func TestValidateForServer(t *testing.T) {
 					{Name: "openai", Model: "gpt-4o-mini", APIKey: "test"},
 				},
 				MySQLDSN: "user:pass@tcp(localhost:3306)/db",
+				Console:  agent.ConsoleConfig{JWTSecret: "my-secret"},
 			},
 			wantErr: false,
 		},
@@ -71,6 +72,7 @@ func TestValidateForServer(t *testing.T) {
 			cfg: &agent.Config{
 				Providers: []agent.ProviderConfig{},
 				MySQLDSN:  "user:pass@tcp(localhost:3306)/db",
+				Console:   agent.ConsoleConfig{JWTSecret: "my-secret"},
 			},
 			wantErr: true,
 		},
@@ -81,6 +83,17 @@ func TestValidateForServer(t *testing.T) {
 					{Name: "openai", Model: "gpt-4o-mini", APIKey: "test"},
 				},
 				MySQLDSN: "",
+				Console:  agent.ConsoleConfig{JWTSecret: "my-secret"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "no jwt_secret",
+			cfg: &agent.Config{
+				Providers: []agent.ProviderConfig{
+					{Name: "openai", Model: "gpt-4o-mini", APIKey: "test"},
+				},
+				MySQLDSN: "user:pass@tcp(localhost:3306)/db",
 			},
 			wantErr: true,
 		},
@@ -109,9 +122,7 @@ func TestValidateForWeb(t *testing.T) {
 					{Name: "openai", Model: "gpt-4o-mini", APIKey: "test"},
 				},
 				MySQLDSN: "user:pass@tcp(localhost:3306)/db",
-				Console: agent.ConsoleConfig{
-					StaticDir: "/path/to/static",
-				},
+				Console:  agent.ConsoleConfig{JWTSecret: "my-secret"},
 			},
 			wantErr: false,
 		},
@@ -120,9 +131,7 @@ func TestValidateForWeb(t *testing.T) {
 			cfg: &agent.Config{
 				Providers: []agent.ProviderConfig{},
 				MySQLDSN:  "user:pass@tcp(localhost:3306)/db",
-				Console: agent.ConsoleConfig{
-					StaticDir: "/path/to/static",
-				},
+				Console:   agent.ConsoleConfig{JWTSecret: "my-secret"},
 			},
 			wantErr: true,
 		},
@@ -133,22 +142,17 @@ func TestValidateForWeb(t *testing.T) {
 					{Name: "openai", Model: "gpt-4o-mini", APIKey: "test"},
 				},
 				MySQLDSN: "",
-				Console: agent.ConsoleConfig{
-					StaticDir: "/path/to/static",
-				},
+				Console:  agent.ConsoleConfig{JWTSecret: "my-secret"},
 			},
 			wantErr: true,
 		},
 		{
-			name: "no static_dir",
+			name: "no jwt_secret",
 			cfg: &agent.Config{
 				Providers: []agent.ProviderConfig{
 					{Name: "openai", Model: "gpt-4o-mini", APIKey: "test"},
 				},
 				MySQLDSN: "user:pass@tcp(localhost:3306)/db",
-				Console: agent.ConsoleConfig{
-					StaticDir: "",
-				},
 			},
 			wantErr: true,
 		},

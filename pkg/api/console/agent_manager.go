@@ -90,8 +90,9 @@ func (m *AgentManager) DeleteAgent(ctx context.Context, agentID string) error {
 		return fmt.Errorf("delete agent definition: %w", err)
 	}
 
-	// TODO: Remove from registry (registry doesn't support removal yet)
-	slog.Warn("agent deleted from database but remains in registry until restart", "agent_id", agentID)
+	// Remove from registry
+	m.registry.Unregister(agentID)
+	slog.Info("agent deleted from database and registry", "agent_id", agentID)
 
 	return nil
 }
@@ -199,7 +200,7 @@ func (m *AgentManager) buildRoutes(def *mysqlstore.AgentDefinition) []types.Agen
 				if channelID == "web" {
 					continue // Already added
 				}
-				
+
 				// Check if channel is enabled
 				if channelObj, ok := channelData.(map[string]interface{}); ok {
 					if enabled, ok := channelObj["enabled"].(bool); ok && enabled {

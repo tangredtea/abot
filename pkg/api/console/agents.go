@@ -11,8 +11,24 @@ import (
 	"abot/pkg/storage/mysql"
 )
 
+const agentMaxBodySize = 1 << 20 // 1 MB
+
 type agentsHandler struct {
 	deps Deps
+}
+
+// verifyTenantAccess checks that the caller's JWT claims include agentTenantID.
+// Empty agentTenantID is treated as having no tenant — only admin may access.
+func (h *agentsHandler) verifyTenantAccess(claims *auth.Claims, agentTenantID string) bool {
+	if agentTenantID == "" {
+		return claims.Role == "admin"
+	}
+	for _, t := range claims.Tenants {
+		if t == agentTenantID {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *agentsHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -30,20 +46,25 @@ func (h *agentsHandler) list(w http.ResponseWriter, r *http.Request) {
 	if h.deps.DB != nil {
 		store := mysql.NewAgentDefinitionStore(h.deps.DB)
 		agents, err := store.List(r.Context(), tenantID)
-		if err == nil && len(agents) > 0 {
+		if err == nil {
+			if agents == nil {
+				agents = []*mysql.AgentDefinition{}
+			}
 			writeJSON(w, http.StatusOK, agents)
 			return
 		}
 	}
 
+	// Fallback to registry — only return agents that belong to the caller's tenant
+	// by filtering via config-level routes (channel check).
 	agentIDs := h.deps.Registry.ListAgents()
-	result := make([]map[string]interface{}, len(agentIDs))
-	for i, agentID := range agentIDs {
+	result := make([]map[string]interface{}, 0, len(agentIDs))
+	for _, agentID := range agentIDs {
 		entry, ok := h.deps.Registry.GetEntry(agentID)
 		if !ok {
 			continue
 		}
-		result[i] = map[string]interface{}{
+		result = append(result, map[string]interface{}{
 			"id":          entry.Config.ID,
 			"name":        entry.Config.Name,
 			"description": entry.Config.Description,
@@ -52,7 +73,7 @@ func (h *agentsHandler) list(w http.ResponseWriter, r *http.Request) {
 			"avatar":      "🤖",
 			"channels":    []string{"web"},
 			"created_at":  time.Now().Format("2006-01-02"),
-		}
+		})
 	}
 
 	writeJSON(w, http.StatusOK, result)
@@ -75,6 +96,10 @@ func (h *agentsHandler) get(w http.ResponseWriter, r *http.Request) {
 		store := mysql.NewAgentDefinitionStore(h.deps.DB)
 		agent, err := store.Get(r.Context(), agentID)
 		if err == nil && agent != nil {
+			if !h.verifyTenantAccess(claims, agent.TenantID) {
+				writeError(w, http.StatusForbidden, "access denied")
+				return
+			}
 			writeJSON(w, http.StatusOK, agent)
 			return
 		}
@@ -111,6 +136,8 @@ func (h *agentsHandler) create(w http.ResponseWriter, r *http.Request) {
 	if len(claims.Tenants) > 0 {
 		tenantID = claims.Tenants[0]
 	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, agentMaxBodySize)
 
 	var req struct {
 		Name        string                 `json:"name"`
@@ -220,6 +247,12 @@ func (h *agentsHandler) update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "agent not found")
 		return
 	}
+	if !h.verifyTenantAccess(claims, existing.TenantID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, agentMaxBodySize)
 
 	var req struct {
 		Name        string                 `json:"name"`
@@ -298,6 +331,20 @@ func (h *agentsHandler) deleteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store := mysql.NewAgentDefinitionStore(h.deps.DB)
+	existing, err := store.Get(r.Context(), agentID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get agent")
+		return
+	}
+	if existing == nil {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	if !h.verifyTenantAccess(claims, existing.TenantID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	if err := store.Delete(r.Context(), agentID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete agent")
 		return
@@ -329,6 +376,10 @@ func (h *agentsHandler) getConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "agent not found")
 		return
 	}
+	if !h.verifyTenantAccess(claims, agent.TenantID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
 
 	writeJSON(w, http.StatusOK, agent.Config)
 }
@@ -356,7 +407,12 @@ func (h *agentsHandler) updateConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "agent not found")
 		return
 	}
+	if !h.verifyTenantAccess(claims, agent.TenantID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, agentMaxBodySize)
 	var config map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -397,6 +453,10 @@ func (h *agentsHandler) getChannels(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "agent not found")
 		return
 	}
+	if !h.verifyTenantAccess(claims, agent.TenantID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
 
 	writeJSON(w, http.StatusOK, agent.Channels)
 }
@@ -424,7 +484,12 @@ func (h *agentsHandler) updateChannels(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "agent not found")
 		return
 	}
+	if !h.verifyTenantAccess(claims, agent.TenantID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, agentMaxBodySize)
 	var channels []struct {
 		Channel string                 `json:"channel"`
 		Enabled bool                   `json:"enabled"`
