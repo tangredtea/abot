@@ -24,10 +24,10 @@ const (
 	apiBase     = "https://discord.com/api/v10"
 
 	// Gateway opcodes.
-	opDispatch  = 0
-	opHeartbeat = 1
-	opIdentify  = 2
-	opHello     = 10
+	opDispatch     = 0
+	opHeartbeat    = 1
+	opIdentify     = 2
+	opHello        = 10
 	opHeartbeatACK = 11
 
 	// Intents: GUILDS | GUILD_MESSAGES | MESSAGE_CONTENT | DIRECT_MESSAGES.
@@ -264,7 +264,7 @@ func (c *DiscordChannel) sendMessage(ctx context.Context, channelID, text string
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bot "+c.config.Token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := channels.DefaultHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("discord: send: %w", err)
 	}

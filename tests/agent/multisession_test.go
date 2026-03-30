@@ -143,9 +143,11 @@ func (m *mockVectorStore) Search(_ context.Context, collection string, req *type
 	return nil, nil
 }
 
-func (m *mockVectorStore) Delete(_ context.Context, _ string, _ map[string]any) error              { return nil }
-func (m *mockVectorStore) UpdatePayload(_ context.Context, _ string, _ map[string]any, _ map[string]any) error { return nil }
-func (m *mockVectorStore) Close() error                                                            { return nil }
+func (m *mockVectorStore) Delete(_ context.Context, _ string, _ map[string]any) error { return nil }
+func (m *mockVectorStore) UpdatePayload(_ context.Context, _ string, _ map[string]any, _ map[string]any) error {
+	return nil
+}
+func (m *mockVectorStore) Close() error { return nil }
 
 func (m *mockVectorStore) getEntries(collection string) []types.VectorEntry {
 	m.mu.Lock()
@@ -175,8 +177,8 @@ func (e *mockEmbedder) Dimension() int { return e.dim }
 
 // compile-time checks for multisession types
 var (
-	_ model.LLM        = (*scriptedLLM)(nil)
-	_ model.LLM        = (*toolCallLLM)(nil)
+	_ model.LLM         = (*scriptedLLM)(nil)
+	_ model.LLM         = (*toolCallLLM)(nil)
 	_ types.VectorStore = (*mockVectorStore)(nil)
 	_ types.Embedder    = (*mockEmbedder)(nil)
 )
@@ -262,7 +264,7 @@ func TestMultiTurn_ScriptedResponses(t *testing.T) {
 	}
 
 	resp, err := ss.Get(context.Background(), &session.GetRequest{
-		AppName: "test-app", UserID: "u1", SessionID: agent.SessionKey("t1", "u1", "cli"),
+		AppName: "test-app", UserID: "u1", SessionID: agent.SessionKey("t1", "u1", "cli", "bot"),
 	})
 	if err != nil {
 		t.Fatalf("get session: %v", err)
@@ -331,13 +333,13 @@ func TestMultiSession_TenantIsolation(t *testing.T) {
 
 	// Verify tenant-a session has more events than tenant-b.
 	sessA, err := ss.Get(ctx, &session.GetRequest{
-		AppName: "test-app", UserID: "alice", SessionID: agent.SessionKey("tenant-a", "alice", "cli"),
+		AppName: "test-app", UserID: "alice", SessionID: agent.SessionKey("tenant-a", "alice", "cli", "shared-bot"),
 	})
 	if err != nil {
 		t.Fatalf("get tenant-a session: %v", err)
 	}
 	sessB, err := ss.Get(ctx, &session.GetRequest{
-		AppName: "test-app", UserID: "bob", SessionID: agent.SessionKey("tenant-b", "bob", "cli"),
+		AppName: "test-app", UserID: "bob", SessionID: agent.SessionKey("tenant-b", "bob", "cli", "shared-bot"),
 	})
 	if err != nil {
 		t.Fatalf("get tenant-b session: %v", err)
@@ -462,7 +464,7 @@ func TestToolCall_AgentEmitsFunctionCall(t *testing.T) {
 	}
 
 	resp, err := ss.Get(context.Background(), &session.GetRequest{
-		AppName: "test-app", UserID: "u1", SessionID: agent.SessionKey("t1", "u1", "cli"),
+		AppName: "test-app", UserID: "u1", SessionID: agent.SessionKey("t1", "u1", "cli", "tool-bot"),
 	})
 	if err != nil {
 		t.Fatalf("get session: %v", err)

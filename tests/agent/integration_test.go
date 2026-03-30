@@ -178,7 +178,7 @@ func (h *integrationHarness) getSession(t *testing.T) session.Session {
 	resp, err := h.ss.Get(context.Background(), &session.GetRequest{
 		AppName:   "integration-test",
 		UserID:    "user",
-		SessionID: agent.SessionKey("default", "user", "cli"),
+		SessionID: agent.SessionKey("default", "user", "cli", "bot"),
 	})
 	if err != nil {
 		t.Fatalf("get session: %v", err)

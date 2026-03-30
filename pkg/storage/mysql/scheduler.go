@@ -51,6 +51,40 @@ func (s *SchedulerStoreMySQL) UpdateJobState(ctx context.Context, jobID string, 
 		Update("state", JSON(raw)).Error
 }
 
+func (s *SchedulerStoreMySQL) LogExecution(ctx context.Context, log *types.CronJobLog) error {
+	m := &CronJobLogModel{
+		JobID:      log.JobID,
+		RunAt:      log.RunAt,
+		DurationMs: log.DurationMs,
+		Status:     log.Status,
+		Error:      log.Error,
+	}
+	return s.db.WithContext(ctx).Create(m).Error
+}
+
+func (s *SchedulerStoreMySQL) ListLogs(ctx context.Context, jobID string, limit int) ([]*types.CronJobLog, error) {
+	var models []CronJobLogModel
+	q := s.db.WithContext(ctx).Where("job_id = ?", jobID).Order("run_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	if err := q.Find(&models).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*types.CronJobLog, len(models))
+	for i := range models {
+		out[i] = &types.CronJobLog{
+			ID:         models[i].ID,
+			JobID:      models[i].JobID,
+			RunAt:      models[i].RunAt,
+			DurationMs: models[i].DurationMs,
+			Status:     models[i].Status,
+			Error:      models[i].Error,
+		}
+	}
+	return out, nil
+}
+
 // --- converters ---
 
 func cronJobToModel(j *types.CronJob) *CronJobModel {

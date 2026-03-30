@@ -76,7 +76,9 @@ func seedWorkspaceDocs(ctx context.Context, ws types.WorkspaceStore, tenantID st
 
 func seedUserDocs(ctx context.Context, uws types.UserWorkspaceStore, tenantID, userID string) error {
 	userDocFiles := map[string]string{
-		"USER": "workspace/USER.md",
+		"USER":        "workspace/USER.md",
+		"EXPERIMENTS": "workspace/EXPERIMENTS.md",
+		"NOTES":       "workspace/NOTES.md",
 	}
 	for docType, path := range userDocFiles {
 		if _, err := uws.Get(ctx, tenantID, userID, docType); err == nil {

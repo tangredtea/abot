@@ -134,6 +134,11 @@ func newInstallSkill(deps *Deps) tool.Tool {
 					InstalledAt: time.Now(),
 				}
 				_ = deps.TenantSkillStore.Install(ctx, ts)
+
+				// Invalidate cache to force reload
+				if deps.SkillsLoader != nil {
+					deps.SkillsLoader.InvalidateCache(args.Slug, version)
+				}
 			}
 		}
 

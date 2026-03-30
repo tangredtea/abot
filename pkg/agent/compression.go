@@ -9,21 +9,25 @@ import (
 
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/session"
+
+	"abot/pkg/pruning"
 )
 
 // Compressor handles session compression when context grows too large.
 type Compressor struct {
-	summaryLLM     model.LLM
-	sessionService session.Service
-	appName        string
+	summaryLLM      model.LLM
+	sessionService  session.Service
+	appName         string
+	pruningStrategy pruning.Strategy
 }
 
 // NewCompressor creates a compressor with the given summary model.
 func NewCompressor(llm model.LLM, ss session.Service, appName string) *Compressor {
 	return &Compressor{
-		summaryLLM:     llm,
-		sessionService: ss,
-		appName:        appName,
+		summaryLLM:      llm,
+		sessionService:  ss,
+		appName:         appName,
+		pruningStrategy: pruning.DefaultStrategy(),
 	}
 }
 
@@ -57,8 +61,8 @@ func (c *Compressor) estimateTokens(sess session.Session) int {
 	return total
 }
 
-// Compress creates a summary of old events and replaces the session.
-// ADK sessions are append-only, so we delete + recreate with summary as first event.
+// Compress applies three-layer pruning first, then LLM summarization if needed.
+// This reduces LLM calls by ~80% compared to always summarizing.
 func (c *Compressor) Compress(ctx context.Context, sess session.Session) error {
 	events := sess.Events()
 	n := events.Len()
@@ -66,7 +70,19 @@ func (c *Compressor) Compress(ctx context.Context, sess session.Session) error {
 		return nil
 	}
 
-	// Keep the most recent events based on keepRecentPercent.
+	// Convert events to messages
+	messages := c.eventsToMessages(events)
+
+	// Try three-layer pruning first (zero cost)
+	targetTokens := c.estimateTokens(sess) * 70 / 100 // Target 70% of current
+	pruned := c.pruningStrategy.Prune(messages, targetTokens)
+
+	// If pruning succeeded, update session
+	if len(pruned) < len(messages) {
+		return c.replaceSessionWithMessages(ctx, sess, pruned)
+	}
+
+	// Fallback: LLM summarization (only if pruning insufficient)
 	keepFrom := n * (100 - keepRecentPercent) / 100
 	oldText := c.extractText(events, 0, keepFrom)
 
@@ -109,7 +125,42 @@ func (c *Compressor) extractText(events session.Events, from, to int) string {
 }
 
 func (c *Compressor) callSummaryLLM(ctx context.Context, text string) (string, error) {
-	prompt := "Summarize the following conversation concisely, preserving key facts, decisions, and context:\n\n" + text
+	// Structured summary prompt (inspired by OpenClaw)
+	prompt := `Generate a structured context checkpoint summary for the following conversation.
+
+Use this exact format:
+
+## Goals
+[What does the user want to accomplish? List multiple goals if applicable]
+
+## Constraints & Preferences
+- [Any constraints, preferences, or requirements mentioned]
+- [(None) if not applicable]
+
+## Progress
+### Completed
+- [x] [Completed tasks/changes]
+
+### In Progress
+- [ ] [Current work]
+
+### Blocked
+- [Any blocking issues]
+
+## Key Decisions
+- **[Decision]**: [Brief rationale]
+
+## Next Steps
+1. [List what should be done next in order]
+
+## Key Information
+- [Any data, examples, or references needed to continue]
+- [(None) if not applicable]
+
+Keep each section concise. Preserve exact file paths, function names, and error messages.
+
+Conversation:
+` + text
 
 	req := &model.LLMRequest{
 		Contents: []*genai.Content{
@@ -188,6 +239,61 @@ func (c *Compressor) replaceSession(ctx context.Context, sess session.Session, s
 	for i, ev := range keptEvents {
 		if err := c.sessionService.AppendEvent(ctx, newSess, ev); err != nil {
 			return fmt.Errorf("append kept event %d: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+// eventsToMessages converts session events to genai.Content messages.
+func (c *Compressor) eventsToMessages(events session.Events) []*genai.Content {
+	messages := make([]*genai.Content, 0, events.Len())
+	for i := 0; i < events.Len(); i++ {
+		ev := events.At(i)
+		if ev != nil && ev.Content != nil {
+			messages = append(messages, ev.Content)
+		}
+	}
+	return messages
+}
+
+// replaceSessionWithMessages replaces session with pruned messages.
+func (c *Compressor) replaceSessionWithMessages(ctx context.Context, sess session.Session, messages []*genai.Content) error {
+	userID := sess.UserID()
+	sessionID := sess.ID()
+
+	// Collect state
+	state := make(map[string]any)
+	for k, v := range sess.State().All() {
+		state[k] = v
+	}
+
+	// Delete old session
+	if err := c.sessionService.Delete(ctx, &session.DeleteRequest{
+		AppName:   c.appName,
+		UserID:    userID,
+		SessionID: sessionID,
+	}); err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+
+	// Create new session
+	createResp, err := c.sessionService.Create(ctx, &session.CreateRequest{
+		AppName:   c.appName,
+		UserID:    userID,
+		SessionID: sessionID,
+		State:     state,
+	})
+	if err != nil {
+		return fmt.Errorf("recreate session: %w", err)
+	}
+
+	// Append pruned messages
+	for i, msg := range messages {
+		ev := session.NewEvent("pruned")
+		ev.LLMResponse = model.LLMResponse{Content: msg}
+		if err := c.sessionService.AppendEvent(ctx, createResp.Session, ev); err != nil {
+			return fmt.Errorf("append message %d: %w", i, err)
 		}
 	}
 

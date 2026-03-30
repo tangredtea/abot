@@ -12,11 +12,11 @@ import (
 
 // TenantModel maps to the tenants table.
 type TenantModel struct {
-	TenantID  string         `gorm:"column:tenant_id;type:varchar(128);primaryKey"`
-	Name      string         `gorm:"column:name;type:varchar(255)"`
-	GroupID   string         `gorm:"column:group_id;type:varchar(128);index"`
-	Config    JSON           `gorm:"column:config;type:json"`
-	CreatedAt time.Time      `gorm:"column:created_at;autoCreateTime"`
+	TenantID  string    `gorm:"column:tenant_id;type:varchar(128);primaryKey"`
+	Name      string    `gorm:"column:name;type:varchar(255)"`
+	GroupID   string    `gorm:"column:group_id;type:varchar(128);index"`
+	Config    JSON      `gorm:"column:config;type:json"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
 }
 
 func (TenantModel) TableName() string { return "tenants" }
@@ -46,29 +46,29 @@ func (UserWorkspaceDocModel) TableName() string { return "user_workspace_docs" }
 
 // SkillRecordModel maps to the skill_records table.
 type SkillRecordModel struct {
-	ID          int64          `gorm:"column:id;primaryKey;autoIncrement"`
-	Name        string         `gorm:"column:name;type:varchar(255);uniqueIndex"`
-	Description string         `gorm:"column:description;type:text"`
-	Version     string         `gorm:"column:version"`
-	ObjectPath  string         `gorm:"column:object_path"`
-	Tier        string         `gorm:"column:tier;index:idx_tier_status"`
-	AlwaysLoad  bool           `gorm:"column:always_load"`
-	Status      string         `gorm:"column:status;index:idx_tier_status"`
-	Metadata    JSON           `gorm:"column:metadata;type:json"`
-	CreatedAt   time.Time      `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt   time.Time      `gorm:"column:updated_at;autoUpdateTime"`
+	ID          int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	Name        string    `gorm:"column:name;type:varchar(255);uniqueIndex"`
+	Description string    `gorm:"column:description;type:text"`
+	Version     string    `gorm:"column:version"`
+	ObjectPath  string    `gorm:"column:object_path"`
+	Tier        string    `gorm:"column:tier;index:idx_tier_status"`
+	AlwaysLoad  bool      `gorm:"column:always_load"`
+	Status      string    `gorm:"column:status;index:idx_tier_status"`
+	Metadata    JSON      `gorm:"column:metadata;type:json"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 func (SkillRecordModel) TableName() string { return "skill_records" }
 
 // TenantSkillModel maps to the tenant_skills table.
 type TenantSkillModel struct {
-	TenantID    string         `gorm:"column:tenant_id;type:varchar(128);primaryKey;index"`
-	SkillID     int64          `gorm:"column:skill_id;primaryKey"`
-	AlwaysLoad  sql.NullBool   `gorm:"column:always_load"`
-	Config      JSON           `gorm:"column:config;type:json"`
-	Priority    int            `gorm:"column:priority"`
-	InstalledAt time.Time      `gorm:"column:installed_at;autoCreateTime"`
+	TenantID    string       `gorm:"column:tenant_id;type:varchar(128);primaryKey;index"`
+	SkillID     int64        `gorm:"column:skill_id;primaryKey"`
+	AlwaysLoad  sql.NullBool `gorm:"column:always_load"`
+	Config      JSON         `gorm:"column:config;type:json"`
+	Priority    int          `gorm:"column:priority"`
+	InstalledAt time.Time    `gorm:"column:installed_at;autoCreateTime"`
 }
 
 func (TenantSkillModel) TableName() string { return "tenant_skills" }
@@ -103,6 +103,18 @@ type CronJobModel struct {
 }
 
 func (CronJobModel) TableName() string { return "cron_jobs" }
+
+// CronJobLogModel maps to the cron_job_logs table.
+type CronJobLogModel struct {
+	ID         int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	JobID      string    `gorm:"column:job_id;type:varchar(128);index"`
+	RunAt      time.Time `gorm:"column:run_at;index"`
+	DurationMs int64     `gorm:"column:duration_ms"`
+	Status     string    `gorm:"column:status;type:varchar(32)"`
+	Error      string    `gorm:"column:error;type:text"`
+}
+
+func (CronJobLogModel) TableName() string { return "cron_job_logs" }
 
 // AgentRouteModel maps to the agent_routes table.
 type AgentRouteModel struct {
@@ -200,6 +212,15 @@ type AgentChannelModel struct {
 
 func (AgentChannelModel) TableName() string { return "agent_channels" }
 
+// AllowlistModel maps to the sender_allowlist table.
+type AllowlistModel struct {
+	TenantID string `gorm:"column:tenant_id;type:varchar(128);primaryKey"`
+	ChatID   string `gorm:"column:chat_id;type:varchar(128);primaryKey"`
+	Entry    JSON   `gorm:"column:entry;type:json"`
+}
+
+func (AllowlistModel) TableName() string { return "sender_allowlist" }
+
 // --- JSON helper type for GORM ---
 
 // JSON is a json.RawMessage wrapper that implements GORM's Scanner/Valuer.
@@ -236,6 +257,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&TenantSkillModel{},
 		&SkillProposalModel{},
 		&CronJobModel{},
+		&CronJobLogModel{},
 		&AgentRouteModel{},
 		&MemoryEventModel{},
 		&AccountModel{},
@@ -243,5 +265,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&ChatSessionModel{},
 		&AgentDefinitionModel{},
 		&AgentChannelModel{},
+		&AllowlistModel{},
 	)
 }

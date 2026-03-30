@@ -166,11 +166,16 @@ func TenantWorkspaceDir(baseDir, tenantID string) string {
 // Layout: baseDir/{tenantID}/{userID}
 // Falls back to TenantWorkspaceDir when userID is empty.
 func UserWorkspaceDir(baseDir, tenantID, userID string) string {
-	base := TenantWorkspaceDir(baseDir, tenantID)
-	if userID == "" || userID == "default" {
-		return base
+	if tenantID == "" || tenantID == "default" {
+		if userID == "" || userID == "default" {
+			return baseDir
+		}
+		return filepath.Join(baseDir, userID)
 	}
-	return filepath.Join(base, userID)
+	if userID == "" || userID == "default" {
+		return filepath.Join(baseDir, tenantID)
+	}
+	return filepath.Join(baseDir, tenantID, userID)
 }
 
 // ValidateWorkspaceCommand checks that paths referenced in a command

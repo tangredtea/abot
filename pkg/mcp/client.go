@@ -57,6 +57,7 @@ func NewClient(name string, cfg ServerConfig) *Client {
 	}
 }
 
+
 // Connect starts the MCP server process (stdio) or validates the HTTP endpoint,
 // then performs initialize + tools/list.
 func (c *Client) Connect(ctx context.Context) error {
@@ -121,7 +122,11 @@ func (c *Client) Close() error {
 		_ = c.stdin.Close()
 	}
 	if c.cmd != nil && c.cmd.Process != nil {
-		return c.cmd.Process.Kill()
+		if err := c.cmd.Process.Kill(); err != nil {
+			return err
+		}
+		// Wait for process to avoid zombie processes
+		_ = c.cmd.Wait()
 	}
 	return nil
 }

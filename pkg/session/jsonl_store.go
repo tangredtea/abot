@@ -35,11 +35,11 @@ type JSONLService struct {
 
 // metadataRecord is the first line written to each JSONL file.
 type metadataRecord struct {
-	Type      string    `json:"_type"`
-	AppName   string    `json:"app_name"`
-	UserID    string    `json:"user_id"`
-	SessionID string    `json:"session_id"`
-	CreatedAt time.Time `json:"created_at"`
+	Type      string         `json:"_type"`
+	AppName   string         `json:"app_name"`
+	UserID    string         `json:"user_id"`
+	SessionID string         `json:"session_id"`
+	CreatedAt time.Time      `json:"created_at"`
 	State     map[string]any `json:"state,omitempty"`
 }
 
@@ -319,6 +319,7 @@ func (s *JSONLService) loadFile(ctx context.Context, path string) error {
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
 
 	// First line must be metadata.
 	if !scanner.Scan() {

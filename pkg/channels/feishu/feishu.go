@@ -235,7 +235,7 @@ func (c *FeishuChannel) getAccessToken(ctx context.Context) (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := channels.DefaultHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("feishu: token request: %w", err)
 	}
@@ -283,7 +283,7 @@ func (c *FeishuChannel) replyMessage(ctx context.Context, chatID, text string) e
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := channels.DefaultHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("feishu: send: %w", err)
 	}

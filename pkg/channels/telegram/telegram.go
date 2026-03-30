@@ -204,7 +204,7 @@ func (c *TelegramChannel) sendMessage(ctx context.Context, chatID int64, text st
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := channels.DefaultHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("telegram: send: %w", err)
 	}

@@ -42,6 +42,20 @@ func (r *AgentRegistry) Register(entry *AgentEntry) {
 	}
 }
 
+// Unregister removes an agent and its routes from the registry.
+func (r *AgentRegistry) Unregister(agentID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.agents, agentID)
+	newRoutes := r.routes[:0]
+	for _, route := range r.routes {
+		if route.AgentID != agentID {
+			newRoutes = append(newRoutes, route)
+		}
+	}
+	r.routes = newRoutes
+}
+
 // GetRunner returns the runner for the given agent ID.
 func (r *AgentRegistry) GetRunner(agentID string) (*runner.Runner, bool) {
 	r.mu.RLock()
@@ -86,7 +100,12 @@ func (r *AgentRegistry) ResolveRoute(msg types.InboundMessage) string {
 		return bestRoute.AgentID
 	}
 
-	// Fallback: return first registered agent.
+	// Fallback: prefer agent marked as default, otherwise use first registered.
+	for _, e := range r.agents {
+		if e.Config.IsDefault {
+			return e.ID
+		}
+	}
 	for id := range r.agents {
 		return id
 	}
@@ -101,11 +120,16 @@ func (r *AgentRegistry) GetEntry(agentID string) (*AgentEntry, bool) {
 	return e, ok
 }
 
-// GetDefaultAgent returns the first registered agent as the default.
+// GetDefaultAgent returns the agent marked as default, falling back to first registered.
 // Used for fallback routing and startup information.
 func (r *AgentRegistry) GetDefaultAgent() *AgentEntry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	for _, e := range r.agents {
+		if e.Config.IsDefault {
+			return e
+		}
+	}
 	for _, e := range r.agents {
 		return e
 	}

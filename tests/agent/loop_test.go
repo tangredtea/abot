@@ -27,7 +27,7 @@ func TestEnsureSession_CreateNew(t *testing.T) {
 		ChatID:   "c1",
 	}
 
-	key := agent.SessionKey("t1", "u1", "cli")
+	key := agent.SessionKey("t1", "u1", "cli", "")
 	sess, err := loop.ExportEnsureSession(context.Background(), msg, key)
 	if err != nil {
 		t.Fatalf("ensureSession: %v", err)
@@ -46,7 +46,7 @@ func TestEnsureSession_ExistingSession(t *testing.T) {
 	ctx := context.Background()
 	msg := types.InboundMessage{TenantID: "t1", UserID: "u1", Channel: "cli"}
 
-	key := agent.SessionKey("t1", "u1", "cli")
+	key := agent.SessionKey("t1", "u1", "cli", "")
 	// Create first.
 	sess1, err := loop.ExportEnsureSession(ctx, msg, key)
 	if err != nil {
@@ -192,7 +192,7 @@ func TestRunAgentWithRetry_NonRetryableError(t *testing.T) {
 		Content: "hello",
 	}
 
-	_, err := loop.ExportEnsureSession(context.Background(), msg, agent.SessionKey("t1", "u1", "cli"))
+	_, err := loop.ExportEnsureSession(context.Background(), msg, agent.SessionKey("t1", "u1", "cli", "err-bot"))
 	if err != nil {
 		t.Fatalf("ensureSession: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestRunAgentWithRetry_NonRetryableError(t *testing.T) {
 		Parts: []*genai.Part{{Text: "hello"}},
 	}
 
-	result := loop.ExportRunAgentWithRetry(context.Background(), r, msg, agent.SessionKey("t1", "u1", "cli"), content)
+	result := loop.ExportRunAgentWithRetry(context.Background(), r, msg, agent.SessionKey("t1", "u1", "cli", "err-bot"), content)
 	if result != "" {
 		t.Fatalf("expected empty result for non-retryable error, got %q", result)
 	}
@@ -237,7 +237,7 @@ func TestRunAgentWithRetry_NoCompressor(t *testing.T) {
 		Content: "hello",
 	}
 
-	_, err := loop.ExportEnsureSession(context.Background(), msg, agent.SessionKey("t1", "u1", "cli"))
+	_, err := loop.ExportEnsureSession(context.Background(), msg, agent.SessionKey("t1", "u1", "cli", "overflow-bot"))
 	if err != nil {
 		t.Fatalf("ensureSession: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestRunAgentWithRetry_NoCompressor(t *testing.T) {
 		Parts: []*genai.Part{{Text: "hello"}},
 	}
 
-	result := loop.ExportRunAgentWithRetry(context.Background(), r, msg, agent.SessionKey("t1", "u1", "cli"), content)
+	result := loop.ExportRunAgentWithRetry(context.Background(), r, msg, agent.SessionKey("t1", "u1", "cli", "overflow-bot"), content)
 	if result != "" {
 		t.Fatalf("expected empty result without compressor, got %q", result)
 	}

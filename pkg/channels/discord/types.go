@@ -36,11 +36,11 @@ type readyPayload struct {
 // Discord message types (subset).
 
 type discordMessage struct {
-	ID        string       `json:"id"`
-	ChannelID string       `json:"channel_id"`
-	GuildID   string       `json:"guild_id,omitempty"`
-	Author    discordUser  `json:"author"`
-	Content   string       `json:"content"`
+	ID        string      `json:"id"`
+	ChannelID string      `json:"channel_id"`
+	GuildID   string      `json:"guild_id,omitempty"`
+	Author    discordUser `json:"author"`
+	Content   string      `json:"content"`
 }
 
 type discordUser struct {

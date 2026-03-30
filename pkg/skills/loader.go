@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"abot/pkg/types"
 )
@@ -40,7 +41,7 @@ type SkillsLoader struct {
 
 	// In-memory cache: "name:version" → local path.
 	// Protected by mu. Complements the on-disk cache.
-	mu       sync.RWMutex
+	mu        sync.RWMutex
 	pathCache map[string]string
 }
 
@@ -66,10 +67,12 @@ func NewSkillsLoader(
 }
 
 // LoadForTenant loads all skills visible to a tenant with 4-level priority:
-//   P1: tenant-installed (highest)
-//   P2: group defaults (tenant's group)
-//   P3: global (tier=global, status=published)
-//   P4: builtin (tier=builtin, status=published)
+//
+//	P1: tenant-installed (highest)
+//	P2: group defaults (tenant's group)
+//	P3: global (tier=global, status=published)
+//	P4: builtin (tier=builtin, status=published)
+//
 // Same-name skills at higher priority shadow lower ones.
 func (sl *SkillsLoader) LoadForTenant(ctx context.Context, tenantID string) ([]*ResolvedSkill, error) {
 	seen := make(map[string]bool)
@@ -153,6 +156,83 @@ func (sl *SkillsLoader) InvalidateCache(name, version string) {
 	sl.mu.Lock()
 	defer sl.mu.Unlock()
 	delete(sl.pathCache, name+":"+version)
+}
+
+// WarmupAlwaysLoad preloads all always_load skills to local cache.
+// This reduces latency on first use by downloading skills at startup.
+func (sl *SkillsLoader) WarmupAlwaysLoad(ctx context.Context) error {
+	allPublished, err := sl.registryStore.List(ctx, types.SkillListOpts{Status: types.StatusPublished})
+	if err != nil {
+		return fmt.Errorf("list published skills: %w", err)
+	}
+
+	var wg sync.WaitGroup
+	for _, rec := range allPublished {
+		if !rec.AlwaysLoad {
+			continue
+		}
+		wg.Add(1)
+		go func(r *types.SkillRecord) {
+			defer wg.Done()
+			if _, err := sl.ResolveContent(ctx, r.Name, r.Version, r.ObjectPath); err != nil {
+				slog.Warn("warmup: failed to preload skill", "skill", r.Name, "error", err)
+			} else {
+				slog.Info("warmup: preloaded skill", "skill", r.Name, "version", r.Version)
+			}
+		}(rec)
+	}
+	wg.Wait()
+	return nil
+}
+
+// CleanupStaleCache removes cached skills not accessed in maxAge duration.
+func (sl *SkillsLoader) CleanupStaleCache(maxAge int64) error {
+	if sl.cacheDir == "" {
+		return nil
+	}
+
+	entries, err := os.ReadDir(sl.cacheDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read cache dir: %w", err)
+	}
+
+	now := time.Now().Unix()
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		skillDir := filepath.Join(sl.cacheDir, entry.Name())
+		versions, err := os.ReadDir(skillDir)
+		if err != nil {
+			continue
+		}
+		for _, ver := range versions {
+			if !ver.IsDir() {
+				continue
+			}
+			versionDir := filepath.Join(skillDir, ver.Name())
+			skillFile := filepath.Join(versionDir, "SKILL.md")
+			info, err := os.Stat(skillFile)
+			if err != nil {
+				continue
+			}
+			age := now - info.ModTime().Unix()
+			if age > maxAge {
+				if err := os.RemoveAll(versionDir); err != nil {
+					slog.Warn("cleanup: failed to remove stale cache", "path", versionDir, "error", err)
+				} else {
+					slog.Info("cleanup: removed stale cache", "skill", entry.Name(), "version", ver.Name(), "age_days", age/86400)
+					sl.mu.Lock()
+					delete(sl.pathCache, entry.Name()+":"+ver.Name())
+					sl.mu.Unlock()
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // ResolveContent lazy-pulls skill content from BOS/S3 to local disk.

@@ -8,10 +8,8 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -398,3 +396,4 @@ func TestHandleMessageCallback(t *testing.T) {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 		}
 	})
+}

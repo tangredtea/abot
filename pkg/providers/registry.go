@@ -10,8 +10,8 @@ import (
 
 // Registry holds all known provider specs and routes model names to providers.
 type Registry struct {
-	mu    sync.RWMutex
-	specs []types.ProviderSpec
+	mu     sync.RWMutex
+	specs  []types.ProviderSpec
 	byName map[string]*types.ProviderSpec
 }
 

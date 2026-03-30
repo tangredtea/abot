@@ -35,8 +35,8 @@ type SubagentManager struct {
 	bus            types.MessageBus
 	sessionService session.Service
 	appName        string
-	tasks map[string]*SubagentTask
-	mu    sync.RWMutex
+	tasks          map[string]*SubagentTask
+	mu             sync.RWMutex
 	wg             sync.WaitGroup
 }
 
@@ -150,6 +150,20 @@ func (sm *SubagentManager) GetTask(taskID string) (*SubagentTask, bool) {
 	return t, ok
 }
 
+// CleanupCompleted removes all completed or failed tasks from the map.
+func (sm *SubagentManager) CleanupCompleted() int {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	removed := 0
+	for id, t := range sm.tasks {
+		if t.Status == "completed" || t.Status == "failed" {
+			delete(sm.tasks, id)
+			removed++
+		}
+	}
+	return removed
+}
+
 // Wait blocks until all spawned goroutines have finished.
 func (sm *SubagentManager) Wait() {
 	sm.wg.Wait()
@@ -242,4 +256,3 @@ func (sm *SubagentManager) ListTasks() []types.TaskSummary {
 	}
 	return out
 }
-

@@ -55,7 +55,7 @@ type SkillRecord struct {
 type TenantSkill struct {
 	TenantID    string
 	SkillID     int64
-	AlwaysLoad  *bool          // nil=inherit default
+	AlwaysLoad  *bool // nil=inherit default
 	Config      map[string]any
 	Priority    int
 	InstalledAt time.Time

@@ -111,8 +111,8 @@ func (ms *MemoryService) Search(ctx context.Context, req *memory.SearchRequest) 
 		ts, _ := r.Payload["timestamp"].(string)
 		t, _ := time.Parse(time.RFC3339, ts)
 		resp.Memories = append(resp.Memories, memory.Entry{
-			Content: genai.NewContentFromText(text, "model"),
-			Author:  "memory",
+			Content:   genai.NewContentFromText(text, "model"),
+			Author:    "memory",
 			Timestamp: t,
 		})
 	}

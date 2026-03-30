@@ -26,6 +26,11 @@ type SkillInstaller interface {
 	Install(ctx context.Context, slug, version, registryName string, objStore types.ObjectStore, objectPath string) (*SkillInstallResult, error)
 }
 
+// SkillsLoader abstracts skill loading and caching operations.
+type SkillsLoader interface {
+	InvalidateCache(name, version string)
+}
+
 // SkillInstallResult holds the outcome of a skill installation.
 type SkillInstallResult struct {
 	Version          string
@@ -74,27 +79,30 @@ type CronScheduler interface {
 // Deps holds all external dependencies needed by tool builders.
 // Uses local interfaces for cross-task deps to avoid circular imports.
 type Deps struct {
-	Bus                types.MessageBus
-	WorkspaceStore     types.WorkspaceStore
-	UserWorkspaceStore types.UserWorkspaceStore
-	SkillRegistryStore types.SkillRegistryStore
-	TenantSkillStore   types.TenantSkillStore
-	SchedulerStore     types.SchedulerStore
-	CronScheduler      CronScheduler      // Optional; nil disables cron tool (falls back to store-only writes).
-	ObjectStore        types.ObjectStore
-	ProposalStore      types.SkillProposalStore
-	SkillSearcher      SkillSearcher   // Provided by skills.RegistryManager.
-	SkillInstaller     SkillInstaller  // Provided by skills.RegistryManager.
-	Subagent           SubagentSpawner // Optional; nil disables subagent/list_tasks tools.
-	VectorStore        types.VectorStore
-	Embedder           types.Embedder
-	MemoryEventStore   types.MemoryEventStore
+	Bus                 types.MessageBus
+	WorkspaceStore      types.WorkspaceStore
+	UserWorkspaceStore  types.UserWorkspaceStore
+	SkillRegistryStore  types.SkillRegistryStore
+	TenantSkillStore    types.TenantSkillStore
+	SchedulerStore      types.SchedulerStore
+	CronScheduler       CronScheduler // Optional; nil disables cron tool (falls back to store-only writes).
+	ObjectStore         types.ObjectStore
+	ProposalStore       types.SkillProposalStore
+	SkillSearcher       SkillSearcher   // Provided by skills.RegistryManager.
+	SkillInstaller      SkillInstaller  // Provided by skills.RegistryManager.
+	SkillsLoader        SkillsLoader    // Provided by skills.SkillsLoader for cache invalidation.
+	Subagent            SubagentSpawner // Optional; nil disables subagent/list_tasks tools.
+	VectorStore         types.VectorStore
+	Embedder            types.Embedder
+	EmbeddingCache      types.EmbeddingCache // Optional; nil disables caching
+	BM25Scorer          types.BM25Scorer     // Optional; nil disables BM25 scoring
+	MemoryEventStore    types.MemoryEventStore
 	WorkspaceDir        string
 	DenyPatterns        []string
-	RestrictToWorkspace bool         // when true, all file ops must stay within WorkspaceDir
-	AllowedPaths        []string     // absolute paths allowed outside workspace (escape hatch)
-	ExecLimits          *ExecLimits  // resource limits for exec commands (nil = no limits)
-	SandboxOpts         *SandboxOpts // Linux Landlock sandbox options (nil = no sandbox)
-	TenantStore         TenantStore  // tenant config store for per-tenant tool permissions (nil = allow all)
+	RestrictToWorkspace bool               // when true, all file ops must stay within WorkspaceDir
+	AllowedPaths        []string           // absolute paths allowed outside workspace (escape hatch)
+	ExecLimits          *ExecLimits        // resource limits for exec commands (nil = no limits)
+	SandboxOpts         *SandboxOpts       // Linux Landlock sandbox options (nil = no sandbox)
+	TenantStore         TenantStore        // tenant config store for per-tenant tool permissions (nil = allow all)
 	RateLimiter         *TenantRateLimiter // per-tenant rate limiter (nil = no limit)
 }

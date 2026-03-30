@@ -27,16 +27,16 @@ func NewLRU[K comparable, V any](capacity int) *lruCache[K, V] {
 }
 
 func (c *lruCache[K, V]) Get(key K) (V, bool) {
-	c.mu.RLock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	el, ok := c.items[key]
-	c.mu.RUnlock()
 	if !ok {
 		var zero V
 		return zero, false
 	}
-	c.mu.Lock()
+
 	c.order.MoveToFront(el)
-	c.mu.Unlock()
 	return el.Value.(*entry[K, V]).value, true
 }
 

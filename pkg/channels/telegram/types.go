@@ -2,13 +2,13 @@ package telegram
 
 // TelegramConfig holds configuration for the Telegram Bot channel.
 type TelegramConfig struct {
-	Token        string   `yaml:"token"`
-	WebhookURL   string   `yaml:"webhook_url,omitempty"`   // optional; if empty, uses long polling
-	WebhookPort  int      `yaml:"webhook_port,omitempty"`
-	WebhookPath  string   `yaml:"webhook_path,omitempty"`
-	AllowFrom    []string `yaml:"allow_from,omitempty"`
-	TenantID     string   `yaml:"tenant_id"`
-	PollTimeout  int      `yaml:"poll_timeout,omitempty"` // getUpdates timeout in seconds, default 30
+	Token       string   `yaml:"token"`
+	WebhookURL  string   `yaml:"webhook_url,omitempty"` // optional; if empty, uses long polling
+	WebhookPort int      `yaml:"webhook_port,omitempty"`
+	WebhookPath string   `yaml:"webhook_path,omitempty"`
+	AllowFrom   []string `yaml:"allow_from,omitempty"`
+	TenantID    string   `yaml:"tenant_id"`
+	PollTimeout int      `yaml:"poll_timeout,omitempty"` // getUpdates timeout in seconds, default 30
 }
 
 // Update represents a Telegram Bot API Update object (subset).
@@ -19,13 +19,13 @@ type Update struct {
 
 // Message represents a Telegram message (subset of fields we care about).
 type Message struct {
-	MessageID int64  `json:"message_id"`
-	From      *User  `json:"from,omitempty"`
-	Chat      Chat   `json:"chat"`
-	Text      string `json:"text,omitempty"`
+	MessageID int64       `json:"message_id"`
+	From      *User       `json:"from,omitempty"`
+	Chat      Chat        `json:"chat"`
+	Text      string      `json:"text,omitempty"`
 	Photo     []PhotoSize `json:"photo,omitempty"`
-	Voice     *Voice `json:"voice,omitempty"`
-	Document  *Document `json:"document,omitempty"`
+	Voice     *Voice      `json:"voice,omitempty"`
+	Document  *Document   `json:"document,omitempty"`
 }
 
 // User represents a Telegram user.
@@ -45,9 +45,9 @@ type Chat struct {
 
 // PhotoSize represents one size of a photo.
 type PhotoSize struct {
-	FileID   string `json:"file_id"`
-	Width    int    `json:"width"`
-	Height   int    `json:"height"`
+	FileID string `json:"file_id"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
 }
 
 // Voice represents a voice message.

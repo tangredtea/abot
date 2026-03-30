@@ -19,21 +19,23 @@ var docSyncMap = map[string]struct {
 	docType string
 	store   string // "workspace" or "user"
 }{
-	"IDENTITY.md":      {"IDENTITY", "user"},
-	"SOUL.md":          {"SOUL", "user"},
-	"RULES.md":         {"RULES", "workspace"},
-	"TOOLS.md":         {"TOOLS", "workspace"},
-	"AGENT.md":         {"AGENT", "user"},
-	"HEARTBEAT.md":     {"HEARTBEAT", "workspace"},
-	"USER.md":          {"USER", "user"},
+	"IDENTITY.md":    {"IDENTITY", "user"},
+	"SOUL.md":        {"SOUL", "user"},
+	"RULES.md":       {"RULES", "workspace"},
+	"TOOLS.md":       {"TOOLS", "workspace"},
+	"AGENT.md":       {"AGENT", "user"},
+	"HEARTBEAT.md":   {"HEARTBEAT", "workspace"},
+	"USER.md":        {"USER", "user"},
+	"EXPERIMENTS.md": {"EXPERIMENTS", "user"},
+	"NOTES.md":       {"NOTES", "user"},
 }
 
 // syncFileToStore syncs a workspace file to the corresponding MySQL store
 // if the path matches a known doc type. Best-effort — logs errors but doesn't fail.
-func syncFileToStore(ctx tool.Context, deps *Deps, relPath, content string) {
+func syncFileToStore(ctx tool.Context, deps *Deps, relPath, content string) error {
 	info, ok := docSyncMap[relPath]
 	if !ok {
-		return
+		return nil
 	}
 	tenantID := stateStr(ctx, "tenant_id")
 	if tenantID == "" {
@@ -43,33 +45,38 @@ func syncFileToStore(ctx tool.Context, deps *Deps, relPath, content string) {
 	switch info.store {
 	case "workspace":
 		if deps.WorkspaceStore == nil {
-			return
+			return nil
 		}
-		_ = deps.WorkspaceStore.Put(ctx, &types.WorkspaceDoc{
+		if err := deps.WorkspaceStore.Put(ctx, &types.WorkspaceDoc{
 			TenantID: tenantID,
 			DocType:  info.docType,
 			Content:  content,
 			Version:  1,
-		})
+		}); err != nil {
+			return fmt.Errorf("sync to workspace store: %w", err)
+		}
 		slog.Debug("sync file to store", "path", relPath, "target", "workspace_docs."+info.docType)
 
 	case "user":
 		if deps.UserWorkspaceStore == nil {
-			return
+			return nil
 		}
 		userID := stateStr(ctx, "user_id")
 		if userID == "" {
 			userID = types.DefaultUserID
 		}
-		_ = deps.UserWorkspaceStore.Put(ctx, &types.UserWorkspaceDoc{
+		if err := deps.UserWorkspaceStore.Put(ctx, &types.UserWorkspaceDoc{
 			TenantID: tenantID,
 			UserID:   userID,
 			DocType:  info.docType,
 			Content:  content,
 			Version:  1,
-		})
+		}); err != nil {
+			return fmt.Errorf("sync to user workspace store: %w", err)
+		}
 		slog.Debug("sync file to store", "path", relPath, "target", "user_workspace_docs."+info.docType)
 	}
+	return nil
 }
 
 // --- read_file ---
@@ -90,6 +97,27 @@ func newReadFile(deps *Deps) tool.Tool {
 		Name:        "read_file",
 		Description: "Read the contents of a file from the workspace (max 2 MB).",
 	}, func(ctx tool.Context, args readFileArgs) (readFileResult, error) {
+		// Check if this is a persona file that should be read from MySQL
+		if info, ok := docSyncMap[args.Path]; ok {
+			tenantID := stateStr(ctx, "tenant_id")
+			if tenantID == "" {
+				tenantID = types.DefaultTenantID
+			}
+			if info.store == "workspace" && deps.WorkspaceStore != nil {
+				if doc, err := deps.WorkspaceStore.Get(ctx, tenantID, info.docType); err == nil && doc != nil {
+					return readFileResult{Content: doc.Content}, nil
+				}
+			} else if info.store == "user" && deps.UserWorkspaceStore != nil {
+				userID := stateStr(ctx, "user_id")
+				if userID == "" {
+					userID = types.DefaultUserID
+				}
+				if doc, err := deps.UserWorkspaceStore.Get(ctx, tenantID, userID, info.docType); err == nil && doc != nil {
+					return readFileResult{Content: doc.Content}, nil
+				}
+			}
+		}
+		// Fall back to file system
 		wsDir := UserWorkspaceDir(deps.WorkspaceDir, stateStr(ctx, "tenant_id"), stateStr(ctx, "user_id"))
 		fullPath, err := ValidatePath(args.Path, wsDir, deps.AllowedPaths...)
 		if err != nil {
@@ -139,7 +167,9 @@ func newWriteFile(deps *Deps) tool.Tool {
 		if err := os.WriteFile(fullPath, []byte(args.Content), 0o644); err != nil {
 			return writeFileResult{Error: fmt.Sprintf("write failed: %v", err)}, nil
 		}
-		syncFileToStore(ctx, deps, args.Path, args.Content)
+		if err := syncFileToStore(ctx, deps, args.Path, args.Content); err != nil {
+			slog.Warn("write_file: sync to store failed", "path", args.Path, "err", err)
+		}
 		return writeFileResult{Result: fmt.Sprintf("wrote %d bytes to %s", len(args.Content), args.Path)}, nil
 	})
 	return t
@@ -184,7 +214,9 @@ func newEditFile(deps *Deps) tool.Tool {
 		if err := os.WriteFile(fullPath, []byte(newContent), 0o644); err != nil {
 			return editFileResult{Error: fmt.Sprintf("write failed: %v", err)}, nil
 		}
-		syncFileToStore(ctx, deps, args.Path, newContent)
+		if err := syncFileToStore(ctx, deps, args.Path, newContent); err != nil {
+			slog.Warn("edit_file: sync to store failed", "path", args.Path, "err", err)
+		}
 		return editFileResult{Result: "edit applied"}, nil
 	})
 	return t
@@ -220,7 +252,9 @@ func newAppendFile(deps *Deps) tool.Tool {
 		}
 		// Sync full content to MySQL after append.
 		if final, err := os.ReadFile(fullPath); err == nil {
-			syncFileToStore(ctx, deps, args.Path, string(final))
+			if err := syncFileToStore(ctx, deps, args.Path, string(final)); err != nil {
+				slog.Warn("append_file: sync to store failed", "path", args.Path, "err", err)
+			}
 		}
 		return writeFileResult{Result: fmt.Sprintf("appended %d bytes to %s", len(args.Content), args.Path)}, nil
 	})
@@ -263,6 +297,7 @@ func newListDir(deps *Deps) tool.Tool {
 			return listDirResult{Error: fmt.Sprintf("readdir failed: %v", err)}, nil
 		}
 		result := make([]listDirEntry, 0, len(entries))
+		existingFiles := make(map[string]bool)
 		for _, e := range entries {
 			info, _ := e.Info()
 			size := int64(0)
@@ -274,6 +309,40 @@ func newListDir(deps *Deps) tool.Tool {
 				IsDir: e.IsDir(),
 				Size:  size,
 			})
+			existingFiles[e.Name()] = true
+		}
+		// Inject virtual files from MySQL if listing root directory
+		if args.Path == "" || args.Path == "." {
+			tenantID := stateStr(ctx, "tenant_id")
+			if tenantID == "" {
+				tenantID = types.DefaultTenantID
+			}
+			userID := stateStr(ctx, "user_id")
+			if userID == "" {
+				userID = types.DefaultUserID
+			}
+			for filename, info := range docSyncMap {
+				if existingFiles[filename] {
+					continue
+				}
+				var content string
+				if info.store == "workspace" && deps.WorkspaceStore != nil {
+					if d, err := deps.WorkspaceStore.Get(ctx, tenantID, info.docType); err == nil && d != nil {
+						content = d.Content
+					}
+				} else if info.store == "user" && deps.UserWorkspaceStore != nil {
+					if d, err := deps.UserWorkspaceStore.Get(ctx, tenantID, userID, info.docType); err == nil && d != nil {
+						content = d.Content
+					}
+				}
+				if content != "" {
+					result = append(result, listDirEntry{
+						Name:  filename,
+						IsDir: false,
+						Size:  int64(len(content)),
+					})
+				}
+			}
 		}
 		return listDirResult{Entries: result}, nil
 	})

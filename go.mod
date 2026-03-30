@@ -15,6 +15,7 @@ require (
 	github.com/qdrant/go-client v1.17.1
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/crypto v0.48.0
+	golang.org/x/sync v0.19.0
 	google.golang.org/adk v0.5.0
 	google.golang.org/genai v1.40.0
 	google.golang.org/grpc v1.79.1

@@ -158,10 +158,11 @@ type SessionConfig struct {
 
 // ConsoleConfig holds web console configuration.
 type ConsoleConfig struct {
-	Addr           string   `yaml:"addr"`            // e.g. ":3000"
-	JWTSecret      string   `yaml:"jwt_secret"`
-	StaticDir      string   `yaml:"static_dir"`      // e.g. "web/out"
-	AllowedOrigins []string `yaml:"allowed_origins"` // CORS allowed origins
+	Addr             string   `yaml:"addr"` // e.g. ":3000"
+	JWTSecret        string   `yaml:"jwt_secret"`
+	EncryptionSecret string   `yaml:"encryption_secret"` // separate key for API-key-at-rest encryption; falls back to jwt_secret
+	StaticDir        string   `yaml:"static_dir"`        // e.g. "web/out"
+	AllowedOrigins   []string `yaml:"allowed_origins"`   // CORS allowed origins
 }
 
 // SandboxConfig controls workspace security sandboxing.
@@ -175,8 +176,27 @@ type SandboxConfig struct {
 	ExecNProc           int      `yaml:"exec_nproc"`               // ulimit -u per exec (default 64, 0=no limit)
 	RateLimit           float64  `yaml:"rate_limit"`               // tool calls per second per tenant (0=no limit)
 	RateBurst           int      `yaml:"rate_burst"`               // max burst for rate limiter (default 10)
-	Level               string   `yaml:"level,omitempty"`          // "none" / "standard" / "strict" — Landlock sandbox level
-	SandboxBinary       string   `yaml:"sandbox_binary,omitempty"` // path to abot-sandbox (auto-detected if empty)
+	Level               string   `yaml:"level,omitempty"`          // "none" / "standard" / "strict" / "container"
+	SandboxBinary       string   `yaml:"sandbox_binary,omitempty"` // path to abot-sandbox (for Landlock modes)
+
+	// Container sandbox options (used when level == "container").
+	// Each exec call runs inside an isolated Docker/OCI container.
+	// Recommended runtime: gVisor (runsc) for syscall-level isolation.
+	ContainerImage   string `yaml:"container_image,omitempty"`   // sandbox image (default "abot/sandbox:latest")
+	ContainerRuntime string `yaml:"container_runtime,omitempty"` // OCI runtime: "runsc" (gVisor) or empty (runc)
+	ContainerBinary  string `yaml:"container_binary,omitempty"`  // docker/nerdctl/podman binary (auto-detected)
+	ContainerMemMB   int    `yaml:"container_mem_mb,omitempty"`  // per-container memory limit (default 512)
+	ContainerCPUs    string `yaml:"container_cpus,omitempty"`    // CPU quota, e.g. "0.5" (default "1")
+	ContainerPids    int    `yaml:"container_pids,omitempty"`    // max PIDs per container (default 256)
+	ContainerNetwork string `yaml:"container_network,omitempty"` // "none" / "host" / network name (default "none")
+	ContainerTmpMB         int    `yaml:"container_tmp_mb,omitempty"`         // tmpfs /tmp size in MB (default 100)
+	ContainerDiskMB        int    `yaml:"container_disk_mb,omitempty"`        // workspace overlay size (0 = direct bind-mount)
+	ContainerWorkspaceRoot string `yaml:"container_workspace_root,omitempty"` // host-side workspace root for DooD (Docker-outside-of-Docker)
+
+	// gVisor standalone mode options (used when level == "gvisor").
+	// Runs "runsc do" directly — no Docker, no image, ~50ms startup.
+	GVisorBinary  string `yaml:"gvisor_binary,omitempty"`  // path to runsc (auto-detected if empty)
+	GVisorNetwork bool   `yaml:"gvisor_network,omitempty"` // allow host network (default: isolated)
 }
 
 // PluginsConfig controls which plugins are enabled.
@@ -235,10 +255,10 @@ func (c *Config) Validate() error {
 		add("scheduler.decision_mode=llm requires at least one provider")
 	}
 	switch c.Sandbox.Level {
-	case "", "none", "standard", "strict":
+	case "", "none", "standard", "strict", "gvisor", "container":
 		// valid
 	default:
-		add(fmt.Sprintf("sandbox.level %q is invalid; must be one of: none, standard, strict", c.Sandbox.Level))
+		add(fmt.Sprintf("sandbox.level %q is invalid; must be one of: none, standard, strict, gvisor, container", c.Sandbox.Level))
 	}
 
 	if len(errs) > 0 {

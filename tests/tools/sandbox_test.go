@@ -254,3 +254,270 @@ func TestSandboxBinaryPath_SameDirAsExecutable(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// gVisor standalone tests (runsc do — no Docker)
+// ---------------------------------------------------------------------------
+
+func TestWrapWithSandbox_GVisorMode_NonLinux(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		t.Skip("test only for non-Linux platforms")
+	}
+	opts := &tools.SandboxOpts{Level: tools.SandboxGVisor}
+	bin, _, sandboxed := tools.WrapWithSandbox("echo hello", "/tmp/ws", opts)
+	if sandboxed {
+		t.Error("expected sandboxed=false on non-Linux")
+	}
+	if bin != "sh" {
+		t.Errorf("expected bin=sh, got %s", bin)
+	}
+}
+
+func TestWrapWithSandbox_GVisorMode_NoRunsc(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("gvisor only on Linux")
+	}
+	opts := &tools.SandboxOpts{
+		Level:        tools.SandboxGVisor,
+		GVisorBinary: "/nonexistent/runsc",
+	}
+	bin, _, sandboxed := tools.WrapWithSandbox("ls", "/tmp/ws", opts)
+	if sandboxed {
+		t.Error("expected sandboxed=false when runsc not found")
+	}
+	if bin != "sh" {
+		t.Errorf("expected bin=sh, got %s", bin)
+	}
+}
+
+func TestWrapWithSandbox_GVisorMode_Args(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("gvisor only on Linux")
+	}
+	tmpDir := t.TempDir()
+	fakeRunsc := tmpDir + "/runsc"
+	if err := os.WriteFile(fakeRunsc, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := &tools.SandboxOpts{
+		Level:        tools.SandboxGVisor,
+		GVisorBinary: fakeRunsc,
+	}
+	bin, args, sandboxed := tools.WrapWithSandbox("npm install", "/workspace/t1/u1", opts)
+	if !sandboxed {
+		t.Fatal("expected sandboxed=true")
+	}
+	if bin != fakeRunsc {
+		t.Errorf("expected bin=%s, got %s", fakeRunsc, bin)
+	}
+
+	joined := strings.Join(args, " ")
+
+	for _, want := range []string{
+		"do",
+		"--root=/workspace/t1/u1",
+		"-- sh -c npm install",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("args missing %q, got: %s", want, joined)
+		}
+	}
+
+	// Default: no --network=host
+	if strings.Contains(joined, "--network=host") {
+		t.Errorf("should not have --network=host by default, got: %s", joined)
+	}
+}
+
+func TestWrapWithSandbox_GVisorMode_WithNetwork(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("gvisor only on Linux")
+	}
+	tmpDir := t.TempDir()
+	fakeRunsc := tmpDir + "/runsc"
+	if err := os.WriteFile(fakeRunsc, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := &tools.SandboxOpts{
+		Level:         tools.SandboxGVisor,
+		GVisorBinary:  fakeRunsc,
+		GVisorNetwork: true,
+	}
+	_, args, sandboxed := tools.WrapWithSandbox("curl example.com", "/tmp/ws", opts)
+	if !sandboxed {
+		t.Fatal("expected sandboxed=true")
+	}
+
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--network=host") {
+		t.Errorf("expected --network=host, got: %s", joined)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Container sandbox tests (Docker + gVisor)
+// ---------------------------------------------------------------------------
+
+func TestWrapWithSandbox_ContainerMode_NoDocker(t *testing.T) {
+	opts := &tools.SandboxOpts{
+		Level:           tools.SandboxContainer,
+		ContainerBinary: "/nonexistent/docker-binary",
+	}
+	bin, args, sandboxed := tools.WrapWithSandbox("echo hello", "/tmp/ws", opts)
+	if sandboxed {
+		t.Error("expected sandboxed=false when container binary not found")
+	}
+	if bin != "sh" {
+		t.Errorf("expected bin=sh, got %s", bin)
+	}
+	if len(args) != 2 || args[0] != "-c" || args[1] != "echo hello" {
+		t.Errorf("unexpected args: %v", args)
+	}
+}
+
+func TestWrapWithSandbox_ContainerMode_ArgsStructure(t *testing.T) {
+	// Create a fake docker binary to make resolveContainerBinary succeed.
+	tmpDir := t.TempDir()
+	fakeDocker := tmpDir + "/docker"
+	if err := os.WriteFile(fakeDocker, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Prepend tmpDir to PATH so LookPath finds our fake binary.
+	origPath := os.Getenv("PATH")
+	os.Setenv("PATH", tmpDir+":"+origPath)
+	defer os.Setenv("PATH", origPath)
+
+	opts := &tools.SandboxOpts{
+		Level:            tools.SandboxContainer,
+		ContainerImage:   "myregistry/sandbox:v2",
+		ContainerRuntime: "runsc",
+		ContainerMemMB:   256,
+		ContainerCPUs:    "0.5",
+		ContainerPids:    128,
+		ContainerNetwork: "abot-net",
+		ContainerTmpMB:   50,
+	}
+
+	bin, args, sandboxed := tools.WrapWithSandbox("npm install", "/workspace/tenant1/user1", opts)
+	if !sandboxed {
+		t.Fatal("expected sandboxed=true for container mode")
+	}
+	if bin != fakeDocker {
+		t.Errorf("expected bin=%s, got %s", fakeDocker, bin)
+	}
+
+	joined := strings.Join(args, " ")
+
+	// Verify key flags.
+	for _, want := range []string{
+		"run --rm",
+		"--runtime=runsc",
+		"--memory=256m",
+		"--cpus=0.5",
+		"--pids-limit=128",
+		"--network=abot-net",
+		"--read-only",
+		"--security-opt=no-new-privileges",
+		"--tmpfs=/tmp:size=50m,exec",
+		"-w /workspace",
+		"--user 1000:1000",
+		"myregistry/sandbox:v2",
+		"sh -c npm install",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("args missing %q, got: %s", want, joined)
+		}
+	}
+}
+
+func TestWrapWithSandbox_ContainerMode_Defaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeDocker := tmpDir + "/docker"
+	if err := os.WriteFile(fakeDocker, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origPath := os.Getenv("PATH")
+	os.Setenv("PATH", tmpDir+":"+origPath)
+	defer os.Setenv("PATH", origPath)
+
+	opts := &tools.SandboxOpts{Level: tools.SandboxContainer}
+	_, args, sandboxed := tools.WrapWithSandbox("ls", "/tmp/ws", opts)
+	if !sandboxed {
+		t.Fatal("expected sandboxed=true")
+	}
+
+	joined := strings.Join(args, " ")
+
+	// Verify defaults.
+	for _, want := range []string{
+		"--memory=512m",    // default mem
+		"--cpus=1",         // default cpus
+		"--pids-limit=256", // default pids
+		"--network=none",   // default network
+		"--tmpfs=/tmp:size=100m,exec",
+		"abot/sandbox:latest", // default image
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("args missing default %q, got: %s", want, joined)
+		}
+	}
+
+	// Should NOT contain --runtime when ContainerRuntime is empty.
+	if strings.Contains(joined, "--runtime=") {
+		t.Errorf("should not have --runtime when runtime is empty, got: %s", joined)
+	}
+}
+
+func TestWrapWithSandbox_ContainerMode_EnvVars(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeDocker := tmpDir + "/docker"
+	if err := os.WriteFile(fakeDocker, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origPath := os.Getenv("PATH")
+	os.Setenv("PATH", tmpDir+":"+origPath)
+	defer os.Setenv("PATH", origPath)
+
+	opts := &tools.SandboxOpts{Level: tools.SandboxContainer}
+	_, args, _ := tools.WrapWithSandbox("node -v", "/tmp/ws", opts)
+	joined := strings.Join(args, " ")
+
+	for _, env := range []string{
+		"HOME=/home/sandbox",
+		"NPM_CONFIG_CACHE=/tmp/.npm",
+		"PIP_CACHE_DIR=/tmp/.pip",
+	} {
+		if !strings.Contains(joined, env) {
+			t.Errorf("args missing env %q, got: %s", env, joined)
+		}
+	}
+}
+
+func TestWrapWithSandbox_ContainerMode_WorkspaceMount(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeDocker := tmpDir + "/docker"
+	if err := os.WriteFile(fakeDocker, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origPath := os.Getenv("PATH")
+	os.Setenv("PATH", tmpDir+":"+origPath)
+	defer os.Setenv("PATH", origPath)
+
+	wsDir := t.TempDir()
+	opts := &tools.SandboxOpts{Level: tools.SandboxContainer}
+	_, args, _ := tools.WrapWithSandbox("pwd", wsDir, opts)
+
+	// Find the -v flag and verify workspace mount.
+	found := false
+	for i, a := range args {
+		if a == "-v" && i+1 < len(args) {
+			if strings.HasSuffix(args[i+1], ":/workspace") {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("workspace mount not found in args: %v", args)
+	}
+}

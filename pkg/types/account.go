@@ -57,6 +57,8 @@ type AccountTenantStore interface {
 type ChatSessionStore interface {
 	Create(ctx context.Context, session *ChatSession) error
 	Get(ctx context.Context, id string) (*ChatSession, error)
+	// GetByAccountID fetches a session only if it belongs to the given account (prevents IDOR).
+	GetByAccountID(ctx context.Context, id, accountID string) (*ChatSession, error)
 	ListByAccount(ctx context.Context, accountID, tenantID string, archived bool) ([]*ChatSession, error)
 	Update(ctx context.Context, session *ChatSession) error
 	Delete(ctx context.Context, id string) error

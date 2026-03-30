@@ -12,7 +12,7 @@ type AgentRoute struct {
 	AgentID   string
 	Channel   string
 	ChatID    string
-	AccountID string     // Account ID ("*" for wildcard).
+	AccountID string // Account ID ("*" for wildcard).
 	Peer      *PeerMatch
 	GuildID   string // Discord guild, etc.
 	TeamID    string // Slack team, etc.

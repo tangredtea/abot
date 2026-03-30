@@ -10,11 +10,11 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"abot/pkg/channels"
 	"abot/pkg/types"
+	"golang.org/x/sync/semaphore"
 )
 
 const ChannelName = "wecom"
@@ -26,100 +26,18 @@ const (
 	shutdownTimeout = 5 * time.Second
 )
 
-// dedupCache is a TTL-based message deduplication cache with background cleanup.
-type dedupCache struct {
-	mu      sync.Mutex
-	entries map[string]time.Time
-	ttl     time.Duration
-	maxSize int
-	stop    chan struct{}
-}
-
-const defaultDedupMaxSize = 100000
-
-func NewDedupCache(ttl time.Duration) *dedupCache {
-	d := &dedupCache{
-		entries: make(map[string]time.Time),
-		ttl:     ttl,
-		maxSize: defaultDedupMaxSize,
-		stop:    make(chan struct{}),
-	}
-	go d.backgroundCleanup()
-	return d
-}
-
-// Check returns true if id was already seen (duplicate).
-func (d *dedupCache) Check(id string) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if _, ok := d.entries[id]; ok {
-		return true
-	}
-	// Evict oldest if at capacity.
-	if len(d.entries) >= d.maxSize {
-		d.evictOldest()
-	}
-	d.entries[id] = time.Now()
-	return false
-}
-
-// Close stops the background cleanup goroutine.
-func (d *dedupCache) Close() {
-	select {
-	case <-d.stop:
-	default:
-		close(d.stop)
-	}
-}
-
-func (d *dedupCache) backgroundCleanup() {
-	ticker := time.NewTicker(d.ttl)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-d.stop:
-			return
-		case <-ticker.C:
-			d.mu.Lock()
-			d.cleanup()
-			d.mu.Unlock()
-		}
-	}
-}
-
-func (d *dedupCache) cleanup() {
-	cutoff := time.Now().Add(-d.ttl)
-	for k, t := range d.entries {
-		if t.Before(cutoff) {
-			delete(d.entries, k)
-		}
-	}
-}
-
-func (d *dedupCache) evictOldest() {
-	var oldestKey string
-	var oldestTime time.Time
-	for k, t := range d.entries {
-		if oldestKey == "" || t.Before(oldestTime) {
-			oldestKey = k
-			oldestTime = t
-		}
-	}
-	if oldestKey != "" {
-		delete(d.entries, oldestKey)
-	}
-}
 
 // WeComChannel implements types.Channel for WeCom Bot (企业微信智能机器人).
 type WeComChannel struct {
 	*channels.BaseChannel
 	config   WeComConfig
 	server   *http.Server
-	dedup    *dedupCache
+	dedup    *channels.DedupCache
 	tenantID string
 	userID   string
 	ctx      context.Context
 	cancel   context.CancelFunc
+	sem      *semaphore.Weighted
 }
 
 // NewWeComChannel creates a new WeCom Bot channel.
@@ -130,9 +48,10 @@ func NewWeComChannel(cfg WeComConfig, bus types.MessageBus) (*WeComChannel, erro
 	return &WeComChannel{
 		BaseChannel: channels.NewBaseChannel(ChannelName, bus, cfg.AllowFrom),
 		config:      cfg,
-		dedup:       NewDedupCache(dedupTTL),
+		dedup:       channels.NewDedupCache(dedupTTL),
 		tenantID:    cfg.TenantID,
 		userID:      cfg.UserID,
+		sem:         semaphore.NewWeighted(100), // Limit concurrent message processing
 	}, nil
 }
 
@@ -339,7 +258,14 @@ func (c *WeComChannel) HandleMessageCallback(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	go c.processMessage(c.ctx, msg)
+	go func() {
+		if err := c.sem.Acquire(c.ctx, 1); err != nil {
+			slog.Warn("wecom: failed to acquire semaphore", "err", err)
+			return
+		}
+		defer c.sem.Release(1)
+		c.processMessage(c.ctx, msg)
+	}()
 
 	// Return 200 with empty body; reply asynchronously via webhook URL.
 	w.WriteHeader(http.StatusOK)
@@ -530,7 +456,7 @@ func (c *WeComChannel) sendReply(ctx context.Context, responseURL, content strin
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := channels.DefaultHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("wecom: send reply: %w", err)
 	}

@@ -34,6 +34,16 @@ func (s *ChatSessionStore) Get(ctx context.Context, id string) (*types.ChatSessi
 	return chatSessionFromModel(&m), nil
 }
 
+// GetByAccountID fetches a session only if it belongs to the given account.
+// This prevents IDOR by including account_id in the SQL WHERE clause.
+func (s *ChatSessionStore) GetByAccountID(ctx context.Context, id, accountID string) (*types.ChatSession, error) {
+	var m ChatSessionModel
+	if err := s.db.WithContext(ctx).Where("id = ? AND account_id = ?", id, accountID).First(&m).Error; err != nil {
+		return nil, fmt.Errorf("ChatSessionStore.GetByAccountID(%s,%s): %w", id, accountID, err)
+	}
+	return chatSessionFromModel(&m), nil
+}
+
 func (s *ChatSessionStore) ListByAccount(ctx context.Context, accountID, tenantID string, archived bool) ([]*types.ChatSession, error) {
 	var models []ChatSessionModel
 	q := s.db.WithContext(ctx).Where("account_id = ? AND tenant_id = ? AND archived = ?", accountID, tenantID, archived)

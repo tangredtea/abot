@@ -19,8 +19,8 @@ type LLMEntry struct {
 
 // FallbackLLM implements model.LLM with automatic failover across providers.
 type FallbackLLM struct {
-	entries  []LLMEntry
-	chain    *Chain
+	entries []LLMEntry
+	chain   *Chain
 }
 
 // NewFallbackLLM creates a FallbackLLM from multiple provider entries.

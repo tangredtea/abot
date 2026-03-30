@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -57,8 +58,10 @@ func newExec(deps *Deps) tool.Tool {
 		defer cancel()
 
 		// Wrap command with ulimit resource constraints when configured.
+		// Skip ulimit for container mode — cgroup limits are enforced by Docker.
 		shellCmd := args.Command
-		if deps.ExecLimits != nil {
+		isContainerMode := deps.SandboxOpts != nil && deps.SandboxOpts.Level == SandboxContainer
+		if deps.ExecLimits != nil && !isContainerMode {
 			shellCmd = wrapWithLimits(shellCmd, deps.ExecLimits)
 		}
 
@@ -70,6 +73,7 @@ func newExec(deps *Deps) tool.Tool {
 			cmd = exec.CommandContext(execCtx, bin, cmdArgs...)
 		}
 		cmd.Dir = wsDir
+		cmd.Env = workspaceEnv(wsDir)
 		cmd.WaitDelay = 3 * time.Second // kill lingering child I/O after timeout
 		setProcGroup(cmd)               // Unix: Setpgid for process group kill
 
@@ -94,6 +98,34 @@ func newExec(deps *Deps) tool.Tool {
 		}, nil
 	})
 	return t
+}
+
+// workspaceEnv builds an environment for exec commands that prepends
+// workspace-local tool directories to PATH. This allows each tenant/agent
+// to install their own node, npm, python etc. into their workspace:
+//
+//	workspace/.tools/bin    — custom runtime installs (node, python)
+//	workspace/node_modules/.bin — locally installed npm package binaries
+//
+// All other environment variables are inherited from the host process.
+func workspaceEnv(wsDir string) []string {
+	env := os.Environ()
+
+	localBin := filepath.Join(wsDir, ".tools", "bin")
+	npmBin := filepath.Join(wsDir, "node_modules", ".bin")
+
+	// Prepend workspace-local paths to PATH.
+	newPath := localBin + string(os.PathListSeparator) +
+		npmBin + string(os.PathListSeparator)
+
+	for i, e := range env {
+		if strings.HasPrefix(e, "PATH=") {
+			env[i] = "PATH=" + newPath + e[5:]
+			return env
+		}
+	}
+	// No PATH found, create one.
+	return append(env, "PATH="+newPath+"/usr/local/bin:/usr/bin:/bin")
 }
 
 // wrapWithLimits prepends ulimit constraints to a shell command string.
@@ -139,5 +171,5 @@ func Truncate(s string, max int) string {
 			break
 		}
 	}
-	return truncated + "\n... (truncated)"
+	return truncated + "\n... (Truncated)"
 }
